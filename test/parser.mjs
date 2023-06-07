@@ -63,6 +63,37 @@ test('attribute with no value', ctx => {
   assert.equal(act, exp)
 })
 
+test('processing instruction', ctx => {
+  const xml = '<?foo ?><a>b</a>'
+  const exp = { t: 'a', a: {}, c: ['b'] }
+  const act = parser.call(ctx.h, xml)
+  assert.equal(act, exp)
+})
+
+test('leading text', ctx => {
+  const xml = ' <a>b</a>'
+  const exp = [' ', { t: 'a', a: {}, c: ['b'] }]
+  const act = parser.call(ctx.h, xml)
+  assert.equal(act, exp)
+})
+
+test('trailing text', ctx => {
+  const xml = '<a>b</a> '
+  const exp = [{ t: 'a', a: {}, c: ['b'] }, ' ']
+  const act = parser.call(ctx.h, xml)
+  assert.equal(act, exp)
+})
+
+test('multiple root elements', ctx => {
+  const xml = '<a /><b />'
+  const exp = [
+    { t: 'a', a: {}, c: [] },
+    { t: 'b', a: {}, c: [] }
+  ]
+  const act = parser.call(ctx.h, xml)
+  assert.equal(act, exp)
+})
+
 test('Error - bad /', ctx => {
   const xml = '<a>b<c/a>'
   assert.throws(parser.bind(ctx.h, xml), 'Invalid character')
