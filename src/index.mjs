@@ -2,7 +2,11 @@ import parser from './parser.mjs'
 
 export default class Parsley {
   static from (xml) {
-    return Object.assign(new Parsley(), parser.call(createElement, xml))
+    let elem = parser.call(createElement, xml)
+    if (Array.isArray(elem)) {
+      elem = elem.find(e => e instanceof Parsley)
+    }
+    return elem
   }
 
   xml () {
@@ -35,6 +39,15 @@ export default class Parsley {
 
   findAll (fn) {
     return find(this, makeCondition(fn), false)
+  }
+
+  trimWS () {
+    const isWS = p => typeof p === 'string' && p.trim() === ''
+    this.children = this.children.filter(p => !isWS(p))
+    for (const child of this.children) {
+      if (child instanceof Parsley) child.trimWS()
+    }
+    return this
   }
 }
 

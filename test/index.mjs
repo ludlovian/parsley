@@ -2,14 +2,23 @@ import { test } from 'uvu'
 import * as assert from 'uvu/assert'
 
 import Parsley from '../src/index.mjs'
-
-test('basic cosntruction', () => {
-  const xml = '<foo><bar>quux</bar>baz<boz /></foo>'
-  const p = Parsley.from(xml)
-
-  assert.instance(p, Parsley, 'Created ok')
-  assert.is(p.xml(), xml, 'captured all the input')
-})
+;[
+  ['basic construction', '<a>b</a>'],
+  ['complex construction', '<foo><bar>quux</bar>baz<boz /></foo>'],
+  ['attributes', '<a b="c"><d /></a>'],
+  ['single quoted attributes', "<a b='c'>d</a>", '<a b="c">d</a>'],
+  ['encoded text', '<a>a&lt;b</a>'],
+  ['encoded attributes', '<a b="c&lt;d">e</a>'],
+  ['boolean attributes', '<a b />'],
+  ['leading white space', ' <a />', '<a />'],
+  ['trailing white space', '<a /> ', '<a />']
+].forEach(([msg, xml, exp]) =>
+  test(msg, () => {
+    exp = exp || xml
+    const p = Parsley.from(xml)
+    assert.equal(p.xml(), exp)
+  })
+)
 
 test('basic extract', () => {
   const xml = '<a><b x="1">quux</b><b x="2">foobar</b></a>'
@@ -61,24 +70,11 @@ test('empty results', () => {
   assert.equal(p.findAll('baz'), [])
 })
 
-test('encoded text', () => {
-  const xml = '<a>a&lt;b</a>'
-  const p = Parsley.from(xml)
-  assert.equal(p.text, 'a<b')
-})
-
-test('encoded attributes', () => {
-  const xml = '<a b="c&lt;d">e</a>'
-  const p = Parsley.from(xml)
-  assert.equal(p.attr.b, 'c<d')
-  assert.equal(p.xml(), xml)
-})
-
-test('boolean attributes', () => {
-  const xml = '<a b />'
-  const p = Parsley.from(xml)
-  assert.equal(p.attr.b, true)
-  assert.equal(p.xml(), xml)
+test('trim whitespace', () => {
+  const xml = '<a> <b> <c>d</c> </b> </a>'
+  const exp = '<a><b><c>d</c></b></a>'
+  const act = Parsley.from(xml).trimWS().xml()
+  assert.equal(act, exp)
 })
 
 test.run()
