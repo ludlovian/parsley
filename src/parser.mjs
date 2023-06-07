@@ -2,28 +2,28 @@ const STATES = 'text|name|ws|close|attr|value|dqvalue|sqvalue'.split('|')
 const S = Object.fromEntries(STATES.map((s, i) => [s, i]))
 
 function nextState (s, c) {
-  if (s === S.text) {
+  if (s === S.text) { // In text
     if (c === '<') return S.name
-  } else if (s === S.name) {
+  } else if (s === S.name) { // Gathering tag name
     if (c === '>') return S.text
     if (c === '/') return S.close
     if (c === ' ') return S.ws
-  } else if (s === S.ws) {
+  } else if (s === S.ws) { // in whitespace in tag
     if (c === '>') return S.text
     if (c === '/') return S.close
     if (c !== ' ') return S.attr
-  } else if (s === S.close) {
+  } else if (s === S.close) { // in a closing or selfclose tag
     if (c === '>') return S.text
-  } else if (s === S.attr) {
+  } else if (s === S.attr) {  // gathering an attribute name
     if (c === '=') return S.value
     if (c === ' ') return S.ws
     if (c === '>') return S.text
-  } else if (s === S.value) {
+  } else if (s === S.value) { // at the start of a value
     if (c === '"') return S.dqvalue
     if (c === "'") return S.sqvalue
-  } else if (s === S.dqvalue) {
+  } else if (s === S.dqvalue) { // double-quoted value
     if (c === '"') return S.ws
-  } else if (s === S.sqvalue) {
+  } else if (s === S.sqvalue) { // single-quoted value
     if (c === "'") return S.ws
   }
   return s
@@ -32,23 +32,23 @@ function nextState (s, c) {
 function transition (ctx, from, to) {
   const { stack, buffer, curr } = ctx
   ctx.buffer = ''
-  if (from === S.text) {
+  if (from === S.text) { // commit the text as a child
     if (buffer) ctx.curr[2].push(buffer)
-  } else if (from === S.name) {
+  } else if (from === S.name) { // got tag name
     if (to === S.close) {
       assert(!buffer, 'Invalid character')
-    } else {
+    } else { // open new tag
       stack.push(curr)
       ctx.curr = [buffer, {}, []]
     }
-  } else if (from === S.close) {
+  } else if (from === S.close) { // close tag
     const prev = stack.pop()
     assert(!buffer || buffer === curr[0], 'Unmatching close')
     prev[2].push(ctx.h(...curr))
     ctx.curr = prev
-  } else if (from === S.ws) {
+  } else if (from === S.ws) { // starting a prop name
     if (to === S.attr) ctx.buffer = ctx.char
-  } else if (from === S.attr) {
+  } else if (from === S.attr) { // the start of value
     const attr = ctx.curr[1]
     ctx.key = buffer
     attr[buffer] = true
