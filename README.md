@@ -5,7 +5,7 @@ Ultra-light xml parser
 
 For myself. To simply parse XML responses in JS.
 
-The underlying parser is a very simplt state machine. It will throw on bad XML,
+The underlying parser is a very simple state machine. It will throw on bad XML,
 but doesn't cope with anything other than plain vanilla.
 
 ## Parsley
@@ -22,9 +22,9 @@ A Parsley is simply an object representing the XML element from
 opening tag to the end of the closing tag.
 
 It has three properties:
-- `type` a string
-- `attr` an object
-- `children` an array of Parsley objects and/or strings
+- `type` a string with the element type
+- `attr` an object of the attribute key/values
+- `children` an array of child Parsley objects and/or strings
 
 ### .text => String
 
@@ -40,11 +40,11 @@ Rebuilds the xml representation
 
 ### .find(condition) => Parsley | null
 
-Finds the first child (or grand...-child) matching the condition.
+Finds the first child (or grand\*-child) matching the condition.
 If there is no such then it returns `null`.
 
 If the condition is a string, then it is simply a match on the `type`.
 
 ### .findAll(condition) => [Parsley,...]
 
-Returns an array of all the matching children as Parsleys.
+Returns an array of all the matching children as Parsleys, which might be empty
