@@ -73,7 +73,9 @@ test('empty results', () => {
 test('trim whitespace', () => {
   const xml = '<a> <b> <c>d</c> </b> </a>'
   const exp = '<a><b><c>d</c></b></a>'
-  const act = Parsley.from(xml).trimWS().xml()
+  const act = Parsley.from(xml)
+    .trimWS()
+    .xml()
   assert.equal(act, exp)
 })
 

@@ -2,7 +2,8 @@ import parser from './parser.mjs'
 
 export default class Parsley {
   static from (xml) {
-    let elem = parser.call(createElement, xml)
+    const p = parser(createElement)
+    let elem = p.parse(xml)
     if (Array.isArray(elem)) {
       elem = elem.find(e => e instanceof Parsley)
     }

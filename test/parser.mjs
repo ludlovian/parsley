@@ -4,114 +4,48 @@ import * as assert from 'uvu/assert'
 import parser from '../src/parser.mjs'
 
 test.before.each(ctx => {
-  ctx.h = (t, a, c) => ({ t, a, c })
+  const p = parser((type, attr, children) => [type, attr, children])
+  ctx.parse = p.parse
 })
-
-test('simple text', ctx => {
-  const xml = '<a>b</a>'
-  const exp = { t: 'a', a: {}, c: ['b'] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('nested elements', ctx => {
-  const xml = '<a><b></b></a>'
-  const exp = { t: 'a', a: {}, c: [{ t: 'b', a: {}, c: [] }] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('elements with space padded open', ctx => {
-  const xml = '<a ></a>'
-  const exp = { t: 'a', a: {}, c: [] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('element with attribute', ctx => {
-  const xml = '<a b="c"></a>'
-  const exp = { t: 'a', a: { b: 'c' }, c: [] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('element with multiple attributes', ctx => {
-  const xml = '<a b="c" d=\'e\'></a>'
-  const exp = { t: 'a', a: { b: 'c', d: 'e' }, c: [] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('self close element', ctx => {
-  const xml = '<a><b />c</a>'
-  const exp = { t: 'a', a: {}, c: [{ t: 'b', a: {}, c: [] }, 'c'] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('attribute with no value and self close', ctx => {
-  const xml = '<a b />'
-  const exp = { t: 'a', a: { b: true }, c: [] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('attribute with no value', ctx => {
-  const xml = '<a b></a>'
-  const exp = { t: 'a', a: { b: true }, c: [] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('processing instruction', ctx => {
-  const xml = '<?foo ?><a>b</a>'
-  const exp = { t: 'a', a: {}, c: ['b'] }
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('leading text', ctx => {
-  const xml = ' <a>b</a>'
-  const exp = [' ', { t: 'a', a: {}, c: ['b'] }]
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('trailing text', ctx => {
-  const xml = '<a>b</a> '
-  const exp = [{ t: 'a', a: {}, c: ['b'] }, ' ']
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('multiple root elements', ctx => {
-  const xml = '<a /><b />'
-  const exp = [
-    { t: 'a', a: {}, c: [] },
-    { t: 'b', a: {}, c: [] }
+;[
+  ['simple text', '<a>b</a>', ['a', {}, ['b']]],
+  ['nested elements', '<a><b></b></a>', ['a', {}, [['b', {}, []]]]],
+  ['elements with space padded open', '<a ></a>', ['a', {}, []]],
+  ['element with attribute', '<a b="c"></a>', ['a', { b: 'c' }, []]],
+  [
+    'element with multiple attributes',
+    '<a b="c" d=\'e\'></a>',
+    ['a', { b: 'c', d: 'e' }, []]
+  ],
+  ['self close element', '<a><b />c</a>', ['a', {}, [['b', {}, []], 'c']]],
+  ['attribute with no value and self close', '<a b />', ['a', { b: true }, []]],
+  ['attribute with no value', '<a b></a>', ['a', { b: true }, []]],
+  ['processing instruction', '<?foo ?><a>b</a>', ['a', {}, ['b']]],
+  ['leading text', ' <a>b</a>', [' ', ['a', {}, ['b']]]],
+  ['trailing text', '<a>b</a> ', [['a', {}, ['b']], ' ']],
+  [
+    'multiple root elements',
+    '<a /><b />',
+    [
+      ['a', {}, []],
+      ['b', {}, []]
+    ]
   ]
-  const act = parser.call(ctx.h, xml)
-  assert.equal(act, exp)
-})
-
-test('Error - bad /', ctx => {
-  const xml = '<a>b<c/a>'
-  assert.throws(parser.bind(ctx.h, xml), 'Invalid character')
-})
-
-test('Error - unmatched close', ctx => {
-  const xml = '<a></b>'
-  assert.throws(parser.bind(ctx.h, xml), 'Unmatching close')
-})
-
-test('Error - unclosed document', ctx => {
-  const xml = '<a><b></b>'
-  assert.throws(parser.bind(ctx.h, xml), 'Unclosed document')
-})
-
-test('Error - unclosed tag', ctx => {
-  const xml = '<a><b'
-  assert.throws(parser.bind(ctx.h, xml), 'Unclosed tag')
-})
+].forEach(([msg, xml, exp]) =>
+  test(msg, ({ parse }) => {
+    const act = parse(xml)
+    assert.equal(act, exp)
+  })
+)
+;[
+  ['Unclosed tag at EOF', '<a>b</a'],
+  ['Unclosed document at EOF', '<a><b>c</b>'],
+  ['Unmatched close', '<a><b></a>'],
+  ['Unquoted attribute value', '<a b=c />']
+].forEach(([msg, xml]) =>
+  test('Error: ' + msg, ({ parse }) => {
+    assert.throws(() => parse(xml), msg)
+  })
+)
 
 test.run()

@@ -1,118 +1,172 @@
-const STATES = 'text|name|ws|close|attr|value|dqvalue|sqvalue|pi'.split('|')
-const S = Object.fromEntries(STATES.map((s, i) => [s, i]))
-const DEBUG = false
+import Debug from 'debug'
 
-function nextState (s, c) {
-  if (s === S.text) {
-    // In text
-    if (c === '<') return S.name
-  } else if (s === S.name) {
-    // Gathering tag name
-    if (c === '>') return S.text
-    if (c === '/') return S.close
-    if (c === ' ') return S.ws
-    if (c === '?') return S.pi
-  } else if (s === S.ws) {
-    // in whitespace in tag
-    if (c === '>') return S.text
-    if (c === '/') return S.close
-    if (c !== ' ') return S.attr
-  } else if (s === S.close) {
-    // in a closing or selfclose tag
-    if (c === '>') return S.text
-  } else if (s === S.attr) {
-    // gathering an attribute name
-    if (c === '=') return S.value
-    if (c === ' ') return S.ws
-    if (c === '>') return S.text
-  } else if (s === S.value) {
-    // at the start of a value
-    if (c === '"') return S.dqvalue
-    if (c === "'") return S.sqvalue
-  } else if (s === S.dqvalue) {
-    // double-quoted value
-    if (c === '"') return S.ws
-  } else if (s === S.sqvalue) {
-    // single-quoted value
-    if (c === "'") return S.ws
-  } else if (s === S.pi) {
-    // in a processing instruction
-    if (c === '>') return S.text
-  }
-  return s
-}
+class StateMachine {
+  stateNames = [
+    'text|tagOpen|pi|tagName|tagWS|close',
+    'attrName|attrVal|dqVal|sqVal'
+  ]
+    .join('|')
+    .split('|')
 
-function transition (ctx, from, to) {
-  const { stack, buffer, curr } = ctx
-  ctx.buffer = ''
-  if (from === S.text) {
-    // commit the text as a child
-    if (buffer) ctx.curr[2].push(buffer)
-  } else if (from === S.name) {
-    // got tag name
-    if (to === S.close) {
-      assert(!buffer, 'Invalid character')
-    } else if (to === S.pi) {
-      assert(!buffer, 'Invalid character')
-    } else {
-      // open new tag
-      stack.push(curr)
-      ctx.curr = [buffer, {}, []]
-    }
-  } else if (from === S.close) {
-    // close tag
-    const prev = stack.pop()
-    assert(!buffer || buffer === curr[0], 'Unmatching close')
-    prev[2].push(ctx.h(...curr))
-    ctx.curr = prev
-  } else if (from === S.ws) {
-    // starting a prop name
-    if (to === S.attr) ctx.buffer = ctx.char
-  } else if (from === S.attr) {
-    // the start of value
-    const attr = ctx.curr[1]
-    ctx.key = buffer
-    attr[buffer] = true
-  } else if (from === S.dqvalue || from === S.sqvalue) {
-    const attr = ctx.curr[1]
-    attr[ctx.key] = buffer
-  }
-}
+  states = Object.fromEntries(this.stateNames.map((name, ix) => [name, ix]))
 
-export default function parser (xml) {
-  const ctx = {
-    h: this,
-    stack: [],
-    buffer: '',
-    curr: ['', {}, []]
+  debug = Debug('parsley:parser')
+
+  constructor (createElement) {
+    this.createElement = createElement
   }
-  let state = S.text
-  let i
-  try {
-    for (i = 0; i < xml.length; i++) {
-      ctx.char = xml[i]
-      const next = nextState(state, ctx.char)
-      if (next !== state) transition(ctx, state, next)
-      else ctx.buffer += ctx.char
-      /* c8 ignore next 5 */
-      if (DEBUG) {
-        const { buffer, curr, stack } = ctx
-        const data = JSON.stringify({ buffer, curr, stack })
-        console.log(ctx.char, STATES[state], STATES[next], data)
+
+  run (xml) {
+    let i
+    let state = this.states.text
+    let char
+
+    this.stack = []
+    this.type = '<root>'
+    this.attr = {}
+    this.children = []
+    this.buffer = ''
+
+    try {
+      for (i = 0; i < xml.length; i++) {
+        char = xml[i]
+        const prevBuffer = this.buffer
+        const newState = this.step(state, char)
+
+        if (newState === state) {
+          this.buffer += char
+        } else if (prevBuffer === this.buffer) {
+          this.buffer = ''
+        }
+
+        /* c8 ignore start */
+        if (this.debug.enabled) {
+          this.debug(
+            char,
+            this.stateNames[state],
+            this.stateNames[newState],
+            JSON.stringify({
+              buffer: this.buffer,
+              curr: [this.type, this.attr, this.children],
+              stack: this.stack
+            })
+          )
+        }
+        /* c8 ignore stop */
+
+        state = newState
       }
-      state = next
+    } catch (err) {
+      err.message += `(char: "${char}", pos: ${i + 1})`
+      throw err
     }
-    assert(state === S.text, 'Unclosed tag')
-    assert(!ctx.stack.length, 'Unclosed document')
-    const elems = ctx.curr[2]
-    if (ctx.buffer) elems.push(ctx.buffer)
-    return elems.length < 2 ? elems[0] : elems
-  } catch (err) {
-    err.message += ` char "${xml[i]}" at pos ${i + 1}`
-    throw err
+
+    assert(state === this.states.text, 'Unclosed tag at EOF')
+    assert(!this.stack.length, 'Unclosed document at EOF')
+    if (this.buffer) this.children.push(this.buffer)
+    return this.children.length > 1 ? this.children : this.children[0]
+  }
+
+  storeText (text) {
+    if (!text) return
+    this.children.push(text)
+  }
+
+  startElement () {
+    const { type, attr, children } = this
+    this.stack.push({ type, attr, children })
+    this.type = ''
+    this.attr = {}
+    this.children = []
+  }
+
+  endElement () {
+    /* c8 ignore next */
+    assert(this.stack.length > 0, 'Missing open')
+    const parent = this.stack.pop()
+    assert(!this.buffer || this.buffer === this.type, 'Unmatched close')
+    const elem = this.createElement(this.type, this.attr, this.children)
+    parent.children.push(elem)
+    Object.assign(this, parent)
+  }
+
+  setAttr (name, value) {
+    this.key = name
+    this.attr[name] = value
+  }
+
+  step (s, c) {
+    const S = this.states
+    if (s === S.text) {
+      if (c === '<') {
+        this.storeText(this.buffer)
+        return S.tagOpen
+      }
+    } else if (s === S.tagOpen) {
+      if (c === '/') return S.close
+      if (c === '?') return S.pi
+      this.buffer = c
+      this.startElement()
+      return S.tagName
+    } else if (s === S.tagName) {
+      this.type = this.buffer
+      if (c === '>') return S.text
+      if (c === ' ') return S.tagWS
+    } else if (s === S.close) {
+      if (c === '>') {
+        this.endElement()
+        return S.text
+      }
+    } else if (s === S.tagWS) {
+      if (c === '>') {
+        return S.text
+      } else if (c === '/') {
+        return S.close
+      } else if (c !== ' ') {
+        this.buffer = c
+        return S.attrName
+      }
+    } else if (s === S.attrName) {
+      if (c === '=') {
+        this.setAttr(this.buffer)
+        return S.attrVal
+      } else if (c === ' ') {
+        this.setAttr(this.buffer, true)
+        return S.tagWS
+      } else if (c === '>') {
+        this.setAttr(this.buffer, true)
+        return S.text
+      }
+    } else if (s === S.attrVal) {
+      if (c === '"') return S.dqVal
+      if (c === "'") return S.sqVal
+      assert(false, 'Unquoted attribute value')
+    } else if (s === S.dqVal) {
+      if (c === '"') {
+        this.setAttr(this.key, this.buffer)
+        return S.tagWS
+      }
+    } else if (s === S.sqVal) {
+      if (c === "'") {
+        this.setAttr(this.key, this.buffer)
+        return S.tagWS
+      }
+    } else if (s === S.pi) {
+      if (c === '>') return S.text
+    }
+    return s
   }
 }
 
 function assert (ok, msg) {
   if (!ok) throw new Error(msg)
+}
+
+export default function parser (creator) {
+  const machine = new StateMachine(creator)
+  return {
+    parse (xml) {
+      return machine.run(xml)
+    }
+  }
 }
