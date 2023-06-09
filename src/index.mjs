@@ -10,6 +10,10 @@ export default class Parsley {
     return elem
   }
 
+  type = ''
+  attr = {}
+  children = []
+
   xml () {
     const attr = Object.entries(this.attr).map(([k, v]) =>
       typeof v === 'string' ? ` ${k}="${encode(v)}"` : ' ' + k

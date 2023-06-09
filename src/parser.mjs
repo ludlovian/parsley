@@ -1,12 +1,9 @@
 import Debug from 'debug'
 
 class StateMachine {
-  stateNames = [
-    'text|tagOpen|pi|tagName|tagWS|close',
-    'attrName|attrVal|dqVal|sqVal'
-  ]
-    .join('|')
-    .split('|')
+  stateNames = 'text|tagOpen|pi|tagName|tagWS|close|attrName|attrVal|dqVal|sqVal'.split(
+    '|'
+  )
 
   states = Object.fromEntries(this.stateNames.map((name, ix) => [name, ix]))
 
@@ -22,7 +19,7 @@ class StateMachine {
     let char
 
     this.stack = []
-    this.type = '<root>'
+    this.type = ''
     this.attr = {}
     this.children = []
     this.buffer = ''
@@ -164,9 +161,6 @@ function assert (ok, msg) {
 
 export default function parser (creator) {
   const machine = new StateMachine(creator)
-  return {
-    parse (xml) {
-      return machine.run(xml)
-    }
-  }
+  const parse = xml => machine.run(xml)
+  return { parse }
 }
