@@ -10,9 +10,12 @@ export default class Parsley {
   xml () {
     const { encode } = Parsley
 
-    const attr = entries(this.attr).map(([k, v]) =>
-      typeof v === 'string' ? ` ${k}="${encode(v)}"` : ' ' + k
-    )
+    const attr = entries(this.attr)
+      .map(([k, v]) =>
+        typeof v === 'string' ? ` ${k}="${encode(v)}"` : ' ' + k
+      )
+      .join('')
+
     const children = this.children
       .map(child =>
         child instanceof Parsley ? child.xml() : encode(child.toString())

@@ -7,6 +7,7 @@ const ROUND_TRIP_TESTS = [
   ['basic construction', '<a>b</a>'],
   ['complex construction', '<foo><bar>quux</bar>baz<boz /></foo>'],
   ['attributes', '<a b="c"><d /></a>'],
+  ['multiple attributes', '<a b="c" d="e">f</a>'],
   ['single quoted attributes', "<a b='c'>d</a>", '<a b="c">d</a>'],
   ['encoded text', '<a>a&lt;b</a>'],
   ['encoded attributes', '<a b="c&lt;d">e</a>'],
