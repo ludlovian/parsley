@@ -149,5 +149,10 @@ export default class Parsley {
       c => Parsley.decodeEntities[c]
     )
   }
+
+  static _stripCommentsRegex = /<!--(?:.*?)-->/g
+  static stripComments (xml) {
+    return xml.replace(Parsley._stripCommentsRegex, '')
+  }
 }
 global.Parsley = Parsley

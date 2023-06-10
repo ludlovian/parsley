@@ -120,4 +120,14 @@ test('clone', () => {
   assert.equal(p2.xml(), xml2)
 })
 
+test('strip comments', () => {
+  let xml = '<a><!-- comment --></a>'
+  let exp = '<a></a>'
+  assert.equal(Parsley.stripComments(xml), exp)
+
+  xml = '<a><!-- comment 1 -->b<!--comment 2--></a>'
+  exp = '<a>b</a>'
+  assert.equal(Parsley.stripComments(xml), exp)
+})
+
 test.run()
