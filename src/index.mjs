@@ -1,21 +1,16 @@
 import parser from './parser.mjs'
 
-export default class Parsley {
-  static from (xml) {
-    const p = parser(createElement)
-    let elem = p.parse(xml)
-    if (Array.isArray(elem)) {
-      elem = elem.find(e => e instanceof Parsley)
-    }
-    return elem
-  }
+const { fromEntries, entries, assign } = Object
 
+export default class Parsley {
   type = ''
   attr = {}
   children = []
 
   xml () {
-    const attr = Object.entries(this.attr).map(([k, v]) =>
+    const { encode } = Parsley
+
+    const attr = entries(this.attr).map(([k, v]) =>
       typeof v === 'string' ? ` ${k}="${encode(v)}"` : ' ' + k
     )
     const children = this.children
@@ -31,19 +26,49 @@ export default class Parsley {
   }
 
   get text () {
-    return find(this, p => typeof p === 'string', true)
+    return this._find(p => typeof p === 'string', true, true)
   }
 
   get textAll () {
-    return find(this, p => typeof p === 'string', false)
+    return this._find(p => typeof p === 'string', false, true)
   }
 
   find (fn) {
-    return find(this, makeCondition(fn), true)
+    return this._find(fn, true)
   }
 
   findAll (fn) {
-    return find(this, makeCondition(fn), false)
+    return this._find(fn, false)
+  }
+
+  _find (fn, firstOnly, internal) {
+    if (!internal) {
+      if (typeof fn === 'string') {
+        const type = fn
+        fn = p => p instanceof Parsley && p.type === type
+      } else {
+        const _fn = fn
+        fn = p => p instanceof Parsley && _fn(p)
+      }
+    }
+
+    if (firstOnly) return walk(this).next().value || null
+    return [...walk(this)]
+
+    function * walk (p) {
+      if (fn(p)) {
+        yield p
+        return
+      }
+
+      for (const child of p.children) {
+        if (fn(child)) {
+          yield child
+        } else if (child instanceof Parsley) {
+          yield * walk(child)
+        }
+      }
+    }
   }
 
   trimWS () {
@@ -54,58 +79,72 @@ export default class Parsley {
     }
     return this
   }
-}
 
-Parsley.encode = encode
-Parsley.decode = decode
+  add (child) {
+    const isValid = typeof child === 'string' || child instanceof Parsley
+    if (!isValid) throw new Error('Can only add text or a Parsley')
+    this.children.push(child)
+    return this
+  }
 
-function find (p, cond, first) {
-  if (cond(p)) return first ? p : [p]
-  if (!(p instanceof Parsley)) return null
-  let ret = []
-  for (const child of p.children) {
-    const found = find(child, cond, first)
-    if (found) {
-      if (first) return found
-      ret = ret.concat(found)
+  clone () {
+    return Parsley.create(
+      this.type,
+      { ...this.attr },
+      this.children.map(child =>
+        child instanceof Parsley ? child.clone() : child
+      )
+    )
+  }
+
+  static from (xml) {
+    if (!xml || typeof xml !== 'string') {
+      throw new Error('Not a valid string')
     }
+    const p = parser(Parsley._createAndDecode)
+    let elem = p.parse(xml)
+    if (Array.isArray(elem)) {
+      elem = elem.find(e => e instanceof Parsley)
+    }
+    return elem
   }
-  return first ? null : ret
-}
 
-function makeCondition (cond) {
-  return typeof cond === 'string'
-    ? p => p instanceof Parsley && p.type === cond
-    : p => p instanceof Parsley && cond(p)
-}
-
-const encodes = {
-  '<': '&lt;',
-  '>': '&gt;',
-  '&': '&amp;',
-  "'": '&apos;',
-  '"': '&quot;'
-}
-
-const decodes = Object.fromEntries(
-  Object.entries(encodes).map(([a, b]) => [b, a])
-)
-
-function encode (s) {
-  return s.replace(/[<>&'"]/g, c => encodes[c])
-}
-
-function decode (s) {
-  return s.replace(/&(?:lt|gt|amp|apos|quot);/g, c => decodes[c])
-}
-
-function createElement (type, attr, children) {
-  for (const k in attr) {
-    const v = attr[k]
-    if (v && typeof v === 'string') attr[k] = decode(v)
+  static create (type, attr = {}, children = []) {
+    return assign(new Parsley(), { type, attr, children })
   }
-  children = children.map(child =>
-    typeof child === 'string' ? decode(child) : child
+
+  static _createAndDecode (type, attr, children) {
+    const { decode } = Parsley
+    return Parsley.create(
+      type,
+      fromEntries(entries(attr).map(([k, v]) => [k, decode(v)])),
+      children.map(decode)
+    )
+  }
+
+  static encodeEntities = {
+    '<': '&lt;',
+    '>': '&gt;',
+    '&': '&amp;',
+    "'": '&apos;',
+    '"': '&quot;'
+  }
+
+  static decodeEntities = fromEntries(
+    entries(Parsley.encodeEntities).map(([a, b]) => [b, a])
   )
-  return Object.assign(new Parsley(), { type, attr, children })
+
+  static encode (s) {
+    if (typeof s !== 'string' || !s) return s
+    return s.replace(/[<>&'"]/g, c => Parsley.encodeEntities[c])
+  }
+
+  static decode (s) {
+    if (typeof s !== 'string' || !s) return s
+    return s.replace(
+      /&(?:lt|gt|amp|apos|quot);/g,
+      c => Parsley.decodeEntities[c]
+    )
+  }
 }
+global.Parsley = Parsley

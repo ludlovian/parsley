@@ -26,6 +26,18 @@ It has three properties:
 - `attr` an object of the attribute key/values
 - `children` an array of child Parsley objects and/or strings
 
+### Parsley.from(xml) => Parsley
+
+Parses the xml and returns the Parsley
+
+### Parsley.create(type, attr, children)
+
+Creates one manually
+
+### .add(stringOrParsley)
+
+Adds a child to the current Parsley
+
 ### .text => String
 
 The first text element in this Parsley
@@ -38,6 +50,14 @@ An array of all the text elements in it
 
 Rebuilds the xml representation
 
+### .trimWS() => self
+
+Trims out any text elements which are purely whitespace
+
+### .clone() => Parsley
+
+Produces a clone
+
 ### .find(condition) => Parsley | null
 
 Finds the first child (or grand\*-child) matching the condition.
@@ -48,3 +68,5 @@ If the condition is a string, then it is simply a match on the `type`.
 ### .findAll(condition) => [Parsley,...]
 
 Returns an array of all the matching children as Parsleys, which might be empty
+
+
