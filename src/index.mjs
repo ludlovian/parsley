@@ -155,4 +155,3 @@ export default class Parsley {
     return xml.replace(Parsley._stripCommentsRegex, '')
   }
 }
-global.Parsley = Parsley

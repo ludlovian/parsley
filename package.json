@@ -1,7 +1,7 @@
 {
   "name": "parsley",
   "version": "0.4.2",
-  "description": "SImple XML parser",
+  "description": "Simple XML parser",
   "type": "module",
   "exports": "./src/index.mjs",
   "scripts": {
