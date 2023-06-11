@@ -1,4 +1,4 @@
-import Debug from 'debug'
+// import Debug from 'debug'
 
 class StateMachine {
   stateNames = 'text|tagOpen|pi|tagName|tagWS|close|attrName|attrVal|dqVal|sqVal'.split(
@@ -7,7 +7,7 @@ class StateMachine {
 
   states = Object.fromEntries(this.stateNames.map((name, ix) => [name, ix]))
 
-  debug = Debug('parsley:parser')
+  // debug = Debug('parsley:parser')
 
   constructor (createElement) {
     this.createElement = createElement
@@ -36,20 +36,20 @@ class StateMachine {
           this.buffer = ''
         }
 
-        /* c8 ignore start */
-        if (this.debug.enabled) {
-          this.debug(
-            char,
-            this.stateNames[state],
-            this.stateNames[newState],
-            JSON.stringify({
-              buffer: this.buffer,
-              curr: [this.type, this.attr, this.children],
-              stack: this.stack
-            })
-          )
-        }
-        /* c8 ignore stop */
+        // /* c8 ignore start */
+        // if (this.debug.enabled) {
+        //   this.debug(
+        //     char,
+        //     this.stateNames[state],
+        //     this.stateNames[newState],
+        //     JSON.stringify({
+        //       buffer: this.buffer,
+        //       curr: [this.type, this.attr, this.children],
+        //       stack: this.stack
+        //     })
+        //   )
+        // }
+        // /* c8 ignore stop */
 
         state = newState
       }
