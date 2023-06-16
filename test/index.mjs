@@ -11,7 +11,6 @@ const ROUND_TRIP_TESTS = [
   ['single quoted attributes', "<a b='c'>d</a>", '<a b="c">d</a>'],
   ['encoded text', '<a>a&lt;b</a>'],
   ['encoded attributes', '<a b="c&lt;d">e</a>'],
-  ['boolean attributes', '<a b />'],
   ['leading white space', ' <a />', '<a />'],
   ['trailing white space', '<a /> ', '<a />']
 ]
@@ -71,15 +70,6 @@ function testFind ([msg, xml, fn, exp, all]) {
   })
 }
 
-test('trim whitespace', () => {
-  const xml = '<a> <b> <c>d</c> </b> </a>'
-  const exp = '<a><b><c>d</c></b></a>'
-  const act = Parsley.from(xml)
-    .trimWS()
-    .xml()
-  assert.equal(act, exp)
-})
-
 test('construction', () => {
   const h = Parsley.create
   const p = h('a', {})
@@ -97,17 +87,16 @@ test('construction', () => {
 test('errors', () => {
   assert.throws(() => Parsley.from(''), 'Not a valid string')
   assert.throws(() => Parsley.from({}), 'Not a valid string')
+  assert.throws(() => Parsley.from('<'))
 
   const p = Parsley.create('a')
   assert.throws(() => p.add({}), 'Can only add text or a Parsley')
 })
 
-test('encode & decode oddities', () => {
-  for (const fn of [Parsley.encode, Parsley.decode]) {
-    for (const val of [null, '', {}]) {
-      assert.equal(fn(val), val)
-    }
-  }
+test('safe mode', () => {
+  const safe = true
+  assert.equal(Parsley.from('<', { safe }), null)
+  assert.equal(Parsley.from({}, { safe }), null)
 })
 
 test('clone', () => {
@@ -120,14 +109,9 @@ test('clone', () => {
   assert.equal(p2.xml(), xml2)
 })
 
-test('strip comments', () => {
-  let xml = '<a><!-- comment --></a>'
-  let exp = '<a></a>'
-  assert.equal(Parsley.stripComments(xml), exp)
-
-  xml = '<a><!-- comment 1 -->b<!--comment 2--></a>'
-  exp = '<a>b</a>'
-  assert.equal(Parsley.stripComments(xml), exp)
+test('From multiple text with no element', () => {
+  const xml = 'a<![CDATA[b]]>c'
+  assert.equal(Parsley.from(xml), null)
 })
 
 test.run()

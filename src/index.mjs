@@ -1,6 +1,6 @@
-import parser from './parser.mjs'
+import parse from './parser.mjs'
 
-const { fromEntries, entries, assign } = Object
+const { entries, assign } = Object
 
 export default class Parsley {
   type = ''
@@ -8,12 +8,9 @@ export default class Parsley {
   children = []
 
   xml () {
-    const { encode } = Parsley
-
+    const { encode } = parse
     const attr = entries(this.attr)
-      .map(([k, v]) =>
-        typeof v === 'string' ? ` ${k}="${encode(v)}"` : ' ' + k
-      )
+      .map(([k, v]) => ` ${k}="${encode(v)}"`)
       .join('')
 
     const children = this.children
@@ -74,15 +71,6 @@ export default class Parsley {
     }
   }
 
-  trimWS () {
-    const isWS = p => typeof p === 'string' && p.trim() === ''
-    this.children = this.children.filter(p => !isWS(p))
-    for (const child of this.children) {
-      if (child instanceof Parsley) child.trimWS()
-    }
-    return this
-  }
-
   add (child) {
     const isValid = typeof child === 'string' || child instanceof Parsley
     if (!isValid) throw new Error('Can only add text or a Parsley')
@@ -100,58 +88,24 @@ export default class Parsley {
     )
   }
 
-  static from (xml) {
+  static from (xml, { safe = false } = {}) {
     if (!xml || typeof xml !== 'string') {
+      if (safe) return null
       throw new Error('Not a valid string')
     }
-    const p = parser(Parsley._createAndDecode)
-    let elem = p.parse(xml)
-    if (Array.isArray(elem)) {
-      elem = elem.find(e => e instanceof Parsley)
+
+    try {
+      const elem = parse(Parsley.create, xml)
+      return Array.isArray(elem)
+        ? elem.find(e => e instanceof Parsley) || null
+        : elem
+    } catch (err) {
+      if (safe) return null
+      throw err
     }
-    return elem
   }
 
   static create (type, attr = {}, children = []) {
     return assign(new Parsley(), { type, attr, children })
-  }
-
-  static _createAndDecode (type, attr, children) {
-    const { decode } = Parsley
-    return Parsley.create(
-      type,
-      fromEntries(entries(attr).map(([k, v]) => [k, decode(v)])),
-      children.map(decode)
-    )
-  }
-
-  static encodeEntities = {
-    '<': '&lt;',
-    '>': '&gt;',
-    '&': '&amp;',
-    "'": '&apos;',
-    '"': '&quot;'
-  }
-
-  static decodeEntities = fromEntries(
-    entries(Parsley.encodeEntities).map(([a, b]) => [b, a])
-  )
-
-  static encode (s) {
-    if (typeof s !== 'string' || !s) return s
-    return s.replace(/[<>&'"]/g, c => Parsley.encodeEntities[c])
-  }
-
-  static decode (s) {
-    if (typeof s !== 'string' || !s) return s
-    return s.replace(
-      /&(?:lt|gt|amp|apos|quot);/g,
-      c => Parsley.decodeEntities[c]
-    )
-  }
-
-  static _stripCommentsRegex = /<!--(?:.*?)-->/g
-  static stripComments (xml) {
-    return xml.replace(Parsley._stripCommentsRegex, '')
   }
 }

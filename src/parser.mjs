@@ -1,166 +1,148 @@
 // import Debug from 'debug'
+const ERR_INVALID_DOC = 'Invalid document'
+const ERR_MISMATCH_CLOSE = 'Mismatched close'
+const ERR_UNEXPECTED_EOF = 'Unexpected EOF'
+const ERR_INVALID_TAG = 'Invalid tag'
 
-class StateMachine {
-  stateNames = 'text|tagOpen|pi|tagName|tagWS|close|attrName|attrVal|dqVal|sqVal'.split(
-    '|'
-  )
+const WS = ' \t\n'
+const IGNORE = {}
 
-  states = Object.fromEntries(this.stateNames.map((name, ix) => [name, ix]))
+export default function parse (h, xml, opts = {}) {
+  const { decode = parse.decode } = opts
+  let i = 0
+  const len = xml.length
 
-  // debug = Debug('parsley:parser')
+  const x = readChildren(true)
+  if (i < len) raise(ERR_INVALID_DOC)
+  return x.length > 1 ? x : x.length === 1 ? x[0] : null
 
-  constructor (createElement) {
-    this.createElement = createElement
+  function readElement () {
+    i++
+    if (i === len) raise(ERR_UNEXPECTED_EOF)
+    const c = xml[i]
+    if (c === '?') return readPI()
+    if (c === '!' && xml.slice(i + 1, i + 3) === '--') return readComment()
+    if (c === '!' && xml.slice(i + 1, i + 8) === '[CDATA[') return readCData()
+    const type = readUntil('/>' + WS)
+    const attr = readAttributes()
+    if (xml[i] === '/') {
+      i++
+      skipWhitespace()
+      if (xml[i] !== '>') raise(ERR_INVALID_TAG)
+      i++
+      return h(type, attr, [])
+    }
+    i++
+    const children = readChildren()
+    i += 2
+    const closeType = readUntil('>' + WS)
+    if (closeType !== type) raise(ERR_MISMATCH_CLOSE)
+    skipWhitespace()
+    if (xml[i] !== '>') raise(ERR_INVALID_TAG)
+    i++
+    return h(type, attr, children)
   }
 
-  run (xml) {
-    let i
-    let state = this.states.text
-    let char
+  function readAttributes () {
+    const attr = {}
+    while (true) {
+      skipWhitespace()
+      const c = xml[i]
+      if (c === '/' || c === '>') return attr
+      const name = readUntil('=' + WS)
+      skipWhitespace()
+      if (xml[i] !== '=') raise(ERR_INVALID_TAG)
+      i++
+      skipWhitespace()
+      const quote = xml[i]
+      if (quote !== '"' && quote !== "'") raise(ERR_INVALID_TAG)
+      i++
+      attr[name] = decode(readUntil(quote))
+      i++
+    }
+  }
 
-    this.stack = []
-    this.type = ''
-    this.attr = {}
-    this.children = []
-    this.buffer = ''
-
-    try {
-      for (i = 0; i < xml.length; i++) {
-        char = xml[i]
-        const prevBuffer = this.buffer
-        const newState = this.step(state, char)
-
-        if (newState === state) {
-          this.buffer += char
-        } else if (prevBuffer === this.buffer) {
-          this.buffer = ''
+  function readChildren (allowEOF) {
+    const children = []
+    while (i < len) {
+      if (xml[i] === '<') {
+        if (xml[i + 1] === '/') {
+          return children
         }
-
-        // /* c8 ignore start */
-        // if (this.debug.enabled) {
-        //   this.debug(
-        //     char,
-        //     this.stateNames[state],
-        //     this.stateNames[newState],
-        //     JSON.stringify({
-        //       buffer: this.buffer,
-        //       curr: [this.type, this.attr, this.children],
-        //       stack: this.stack
-        //     })
-        //   )
-        // }
-        // /* c8 ignore stop */
-
-        state = newState
+        const child = readElement()
+        if (child === IGNORE) continue
+        children.push(child)
+      } else {
+        children.push(decode(readUntil('<', allowEOF)))
       }
-    } catch (err) {
-      err.message += `(char: "${char}", pos: ${i + 1})`
-      throw err
     }
-
-    assert(state === this.states.text, 'Unclosed tag at EOF')
-    assert(!this.stack.length, 'Unclosed document at EOF')
-    if (this.buffer) this.children.push(this.buffer)
-    return this.children.length > 1 ? this.children : this.children[0]
+    if (!allowEOF) raise(ERR_UNEXPECTED_EOF)
+    return children
   }
 
-  storeText (text) {
-    if (!text) return
-    this.children.push(text)
+  function readPI () {
+    i++
+    skipUntil('?>')
+    return IGNORE
+  }
+  function readComment () {
+    i += 3
+    skipUntil('-->')
+    return IGNORE
+  }
+  function readCData () {
+    i += 8
+    const j = i
+    skipUntil(']]>')
+    return xml.slice(j, i - 3)
   }
 
-  startElement () {
-    const { type, attr, children } = this
-    this.stack.push({ type, attr, children })
-    this.type = ''
-    this.attr = {}
-    this.children = []
-  }
-
-  endElement () {
-    /* c8 ignore next */
-    assert(this.stack.length > 0, 'Missing open')
-    const parent = this.stack.pop()
-    assert(!this.buffer || this.buffer === this.type, 'Unmatched close')
-    const elem = this.createElement(this.type, this.attr, this.children)
-    parent.children.push(elem)
-    Object.assign(this, parent)
-  }
-
-  setAttr (name, value) {
-    this.key = name
-    this.attr[name] = value
-  }
-
-  step (s, c) {
-    const S = this.states
-    if (s === S.text) {
-      if (c === '<') {
-        this.storeText(this.buffer)
-        return S.tagOpen
-      }
-    } else if (s === S.tagOpen) {
-      if (c === '/') return S.close
-      if (c === '?') return S.pi
-      this.buffer = c
-      this.startElement()
-      return S.tagName
-    } else if (s === S.tagName) {
-      this.type = this.buffer
-      if (c === '>') return S.text
-      if (c === ' ') return S.tagWS
-    } else if (s === S.close) {
-      if (c === '>') {
-        this.endElement()
-        return S.text
-      }
-    } else if (s === S.tagWS) {
-      if (c === '>') {
-        return S.text
-      } else if (c === '/') {
-        return S.close
-      } else if (c !== ' ') {
-        this.buffer = c
-        return S.attrName
-      }
-    } else if (s === S.attrName) {
-      if (c === '=') {
-        this.setAttr(this.buffer)
-        return S.attrVal
-      } else if (c === ' ') {
-        this.setAttr(this.buffer, true)
-        return S.tagWS
-      } else if (c === '>') {
-        this.setAttr(this.buffer, true)
-        return S.text
-      }
-    } else if (s === S.attrVal) {
-      if (c === '"') return S.dqVal
-      if (c === "'") return S.sqVal
-      assert(false, 'Unquoted attribute value')
-    } else if (s === S.dqVal) {
-      if (c === '"') {
-        this.setAttr(this.key, this.buffer)
-        return S.tagWS
-      }
-    } else if (s === S.sqVal) {
-      if (c === "'") {
-        this.setAttr(this.key, this.buffer)
-        return S.tagWS
-      }
-    } else if (s === S.pi) {
-      if (c === '>') return S.text
+  function readUntil (chars, allowEOF) {
+    const j = i
+    for (; i < len; i++) {
+      if (chars.includes(xml[i])) return xml.slice(j, i)
     }
-    return s
+    if (!allowEOF) raise(ERR_UNEXPECTED_EOF)
+    return xml.slice(j)
+  }
+
+  function skipUntil (match) {
+    const n = match.length
+    for (; i < len - n + 1; i++) {
+      if (xml.slice(i, i + n) === match) {
+        i += n
+        return
+      }
+    }
+    raise(ERR_UNEXPECTED_EOF)
+  }
+
+  function skipWhitespace () {
+    for (; i < len; i++) {
+      if (!WS.includes(xml[i])) return
+    }
+    raise(ERR_UNEXPECTED_EOF)
+  }
+
+  function raise (msg) {
+    const e = new parse.ParseError(msg)
+    e.pos = i < len ? i : null
+    throw e
   }
 }
+parse.ParseError = class ParseError extends Error {}
 
-function assert (ok, msg) {
-  if (!ok) throw new Error(msg)
-}
+const ENTITIES = { lt: '<', gt: '>', amp: '&', apos: "'", quot: '"' }
+const decodes = Object.fromEntries(
+  Object.entries(ENTITIES).map(([name, val]) => [`&${name};`, val])
+)
+const decodeRgx = /&(?:lt|gt|amp|apos|quot);/g
+parse.decode = s =>
+  s && typeof s === 'string' ? s.replace(decodeRgx, x => decodes[x]) : s
 
-export default function parser (creator) {
-  const machine = new StateMachine(creator)
-  const parse = xml => machine.run(xml)
-  return { parse }
-}
+const encodes = Object.fromEntries(
+  Object.entries(ENTITIES).map(([name, val]) => [val, `&${name};`])
+)
+const encodeRgx = /[<>&'"]/g
+parse.encode = s =>
+  s && typeof s === 'string' ? s.replace(encodeRgx, c => encodes[c]) : s

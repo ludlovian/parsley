@@ -5,30 +5,45 @@ Ultra-light xml parser
 
 For myself. To simply parse XML responses in JS.
 
-The underlying parser is a very simple state machine. It will throw on bad XML,
-but doesn't cope with anything other than plain vanilla.
+The underlying parser copes with most valid XML, including
+- basic elements, attributes & children
+- comments
+- XML declarations & processing instructions
+- CDATA blocks
+
+It does not validate. It doesn't cope with DTDs. It applies no semantic knowledge.
+
+I use it to parse simple XML. And also to build simple XML.
 
 ## Parsley
 
 A simple _whole-text-at-a-time_ approach.
 
 ```
-import Parsley from 'scrapie/parsley'
+import Parsley from 'parsley'
 
 const p = Parsley.from(xmlText)
 ```
 
 A Parsley is simply an object representing the XML element from
-opening tag to the end of the closing tag.
+opening tag to the end of the closing tag. At the root level, this is simply
+the XML document.
 
 It has three properties:
 - `type` a string with the element type
 - `attr` an object of the attribute key/values
 - `children` an array of child Parsley objects and/or strings
 
-### Parsley.from(xml) => Parsley
+Attribute values and text elements have the basic XML entities decoded.
 
-Parses the xml and returns the Parsley
+### Parsley.from(xml, options) => Parsley
+
+Parses the xml and returns the Parsley.
+
+#### Options
+
+The only valid option is:
+- safe (true/false) - if set, then any errors will not throw but result in `null` being returned
 
 ### Parsley.create(type, attr, children)
 
@@ -49,10 +64,6 @@ An array of all the text elements in it
 ### .xml() => String
 
 Rebuilds the xml representation
-
-### .trimWS() => self
-
-Trims out any text elements which are purely whitespace
 
 ### .clone() => Parsley
 
