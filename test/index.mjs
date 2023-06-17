@@ -114,4 +114,15 @@ test('From multiple text with no element', () => {
   assert.equal(Parsley.from(xml), null)
 })
 
+test('Find with blanks', () => {
+  const xml = '<a />'
+  const p = Parsley.from(xml)
+
+  let f = p.find('b')
+  assert.equal(f, null)
+
+  f = p.find('b', { blank: true })
+  assert.instance(f, Parsley)
+})
+
 test.run()

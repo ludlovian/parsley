@@ -33,8 +33,9 @@ export default class Parsley {
     return this._find(p => typeof p === 'string', false, true)
   }
 
-  find (fn) {
-    return this._find(fn, true)
+  find (fn, { blank = false } = {}) {
+    const p = this._find(fn, true)
+    return p != null ? p : blank ? new Parsley() : null
   }
 
   findAll (fn) {

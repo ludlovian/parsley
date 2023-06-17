@@ -69,12 +69,19 @@ Rebuilds the xml representation
 
 Produces a clone
 
-### .find(condition) => Parsley | null
+### .find(condition, opts) => Parsley | null
 
 Finds the first child (or grand\*-child) matching the condition.
 If there is no such then it returns `null`.
 
 If the condition is a string, then it is simply a match on the `type`.
+
+#### Options
+
+##### blank = (true|false)
+
+If set, then `.find` will always return a Parsley - a blank one if the condition
+was not found.
 
 ### .findAll(condition) => [Parsley,...]
 

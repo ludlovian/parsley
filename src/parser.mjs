@@ -17,6 +17,9 @@ export default function parse (h, xml, opts = {}) {
   return x.length > 1 ? x : x.length === 1 ? x[0] : null
 
   function readElement () {
+    // Reads an entire XML element, incluidng its children.
+    // When called, the current char is pointing at the opening bracket
+    // When it returns, it is pointing just *after* the closing bracket
     i++
     if (i === len) raise(ERR_UNEXPECTED_EOF)
     const c = xml[i]
@@ -26,6 +29,7 @@ export default function parse (h, xml, opts = {}) {
     const type = readUntil('/>' + WS)
     const attr = readAttributes()
     if (xml[i] === '/') {
+      // It is a self-closing element
       i++
       skipWhitespace()
       if (xml[i] !== '>') raise(ERR_INVALID_TAG)
@@ -44,6 +48,10 @@ export default function parse (h, xml, opts = {}) {
   }
 
   function readAttributes () {
+    // Reads the attributes in an element's open tag - which may be none
+    // Starts with the pointer just after the tag name
+    // Returns once it hits either a '/' (for a self-close) or '>' for a
+    // normal element open tag
     const attr = {}
     while (true) {
       skipWhitespace()
@@ -63,6 +71,13 @@ export default function parse (h, xml, opts = {}) {
   }
 
   function readChildren (allowEOF) {
+    // Reads the children of an element, These could be:
+    // - text element
+    // - PI or comment or other element which should be IGNOREd
+    // - regular XML element
+    //
+    // Returns either when it hits EOF (if allowEOF is set) or when it
+    // enoucnters the parent element's close tag
     const children = []
     while (i < len) {
       if (xml[i] === '<') {
@@ -81,16 +96,22 @@ export default function parse (h, xml, opts = {}) {
   }
 
   function readPI () {
+    // Processing instructions and XML declarations are treated as
+    // ignorable text elements
     i++
     skipUntil('?>')
     return IGNORE
   }
+
   function readComment () {
+    // Comments are treated as ignorable text elements
     i += 3
     skipUntil('-->')
     return IGNORE
   }
+
   function readCData () {
+    // CDATA blocks are treated as raw (undecoded) text elements
     i += 8
     const j = i
     skipUntil(']]>')
@@ -98,6 +119,8 @@ export default function parse (h, xml, opts = {}) {
   }
 
   function readUntil (chars, allowEOF) {
+    // Reads until it hits one of the termniation characters (or EOF if allowed)
+    // and returns the word found.
     const j = i
     for (; i < len; i++) {
       if (chars.includes(xml[i])) return xml.slice(j, i)
@@ -107,6 +130,8 @@ export default function parse (h, xml, opts = {}) {
   }
 
   function skipUntil (match) {
+    // Moves until after it has found an exact text match. On return, the
+    // current pointer is pointing at the first char after the match text
     const n = match.length
     for (; i < len - n + 1; i++) {
       if (xml.slice(i, i + n) === match) {
@@ -118,6 +143,7 @@ export default function parse (h, xml, opts = {}) {
   }
 
   function skipWhitespace () {
+    // skips forward (if needed) to jump over whitespace
     for (; i < len; i++) {
       if (!WS.includes(xml[i])) return
     }
