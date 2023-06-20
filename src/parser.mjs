@@ -1,4 +1,3 @@
-// import Debug from 'debug'
 const ERR_INVALID_DOC = 'Invalid document'
 const ERR_MISMATCH_CLOSE = 'Mismatched close'
 const ERR_UNEXPECTED_EOF = 'Unexpected EOF'
@@ -17,7 +16,7 @@ export default function parse (h, xml, opts = {}) {
   return x.length > 1 ? x : x.length === 1 ? x[0] : null
 
   function readElement () {
-    // Reads an entire XML element, incluidng its children.
+    // Reads an entire XML element, including its children.
     // When called, the current char is pointing at the opening bracket
     // When it returns, it is pointing just *after* the closing bracket
     i++
