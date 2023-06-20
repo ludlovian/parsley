@@ -26,23 +26,23 @@ export default class Parsley {
   }
 
   get text () {
-    return this._find(p => typeof p === 'string', true, true)
+    return this._find(p => typeof p === 'string', { internal: true })
   }
 
   get textAll () {
-    return this._find(p => typeof p === 'string', false, true)
+    return this._find(p => typeof p === 'string', { all: true, internal: true })
   }
 
   find (fn, { blank = false } = {}) {
-    const p = this._find(fn, true)
+    const p = this._find(fn)
     return p != null ? p : blank ? new Parsley() : null
   }
 
   findAll (fn) {
-    return this._find(fn, false)
+    return this._find(fn, { all: true })
   }
 
-  _find (fn, firstOnly, internal) {
+  _find (fn, { all, internal } = {}) {
     if (!internal) {
       if (typeof fn === 'string') {
         const type = fn
@@ -53,7 +53,7 @@ export default class Parsley {
       }
     }
 
-    if (firstOnly) return walk(this).next().value || null
+    if (!all) return walk(this).next().value || null
     return [...walk(this)]
 
     function * walk (p) {
