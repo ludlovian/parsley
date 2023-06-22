@@ -109,4 +109,7 @@ export default class Parsley {
   static create (type, attr = {}, children = []) {
     return assign(new Parsley(), { type, attr, children })
   }
+
+  static encode = parse.encode
+  static decode = parse.decode
 }
