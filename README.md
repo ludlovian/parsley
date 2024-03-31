@@ -1,9 +1,9 @@
 # Parsley
-Ultra-light xml parser
+Ultra-light html/xml parser
 
 ## Why?
 
-For myself. To simply parse XML responses in JS.
+For myself. To simply parse HTML/XML responses in JS.
 
 The underlying parser copes with most valid XML, including
 - basic elements, attributes & children
@@ -42,8 +42,9 @@ Parses the xml and returns the Parsley.
 
 #### Options
 
-The only valid option is:
+Valid options are:
 - safe (true/false) - if set, then any errors will not throw but result in `null` being returned
+- allowUnclosed - if set, this will permit closing tags to be absent, and will assume them where it can
 
 ### Parsley.create(type, attr, children)
 
@@ -74,7 +75,8 @@ Produces a clone
 Finds the first child (or grand\*-child) matching the condition.
 If there is no such then it returns `null`.
 
-If the condition is a string, then it is simply a match on the `type`.
+If the condition is a regular string, then it is a match on the `type`.
+
 
 #### Options
 

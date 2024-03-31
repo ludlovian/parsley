@@ -89,14 +89,14 @@ export default class Parsley {
     )
   }
 
-  static from (xml, { safe = false } = {}) {
+  static from (xml, { safe = false, allowUnclosed = false } = {}) {
     if (!xml || typeof xml !== 'string') {
       if (safe) return null
       throw new Error('Not a valid string')
     }
 
     try {
-      const elem = parse(Parsley.create, xml)
+      const elem = parse(Parsley.create, xml, { allowUnclosed })
       return Array.isArray(elem)
         ? elem.find(e => e instanceof Parsley) || null
         : elem

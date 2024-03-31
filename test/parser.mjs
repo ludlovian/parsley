@@ -35,7 +35,8 @@ const VALID_TESTS = [
   ['CDATA does not decode', '<a><![CDATA[&lt;]]></a>', ['a', ['&lt;']]],
   ['attributes decode', '<a b="&lt;" />', ['a', { b: '<' }]],
   ['text decodes', '<a>&lt;</a>', ['a', ['<']]],
-  ['empty doc', '', null]
+  ['empty doc', '', null],
+  ['script', '<a>b<script>c<d</script></a>', ['a', ['b']]]
 ]
 
 VALID_TESTS.forEach(([name, xml, exp]) =>
@@ -70,6 +71,14 @@ ERRORS_TESTS.forEach(([name, xml, rgx]) => {
   test(name, () => {
     assert.throws(() => parse(createElem, xml), rgx)
   })
+})
+
+test('allowUnclosed', () => {
+  const allowUnclosed = true
+  const xml = '<a>b<c>d</a>'
+  const exp = ['a', ['b', ['c', ['d']]]]
+  const act = parse(createElem, xml, { allowUnclosed })
+  assert.equal(act, exp, 'skip close')
 })
 
 test('decode & encode', () => {

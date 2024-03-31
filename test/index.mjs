@@ -125,4 +125,13 @@ test('Find with blanks', () => {
   assert.instance(f, Parsley)
 })
 
+test('Allow unclosed', () => {
+  const allowUnclosed = true
+  const xml1 = '<a>b<c d="e"><f /></a>'
+  const xml2 = '<a>b<c d="e"><f /></c></a>'
+  assert.throws(() => Parsley.from(xml1), 'Unclosed normally throws')
+  const p = Parsley.from(xml1, { allowUnclosed })
+  assert.equal(p.xml(), xml2, 'Inserts assumed close')
+})
+
 test.run()
