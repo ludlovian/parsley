@@ -1,5 +1,5 @@
 {
-  "name": "parsley",
+  "name": "@ludlovian/parsley",
   "version": "0.6.0",
   "description": "Simple XML parser",
   "type": "module",
