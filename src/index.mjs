@@ -1,6 +1,11 @@
 import { decodeEntities, decodeAttributes, encodeEntities } from './decode.mjs'
 import Tokenizer from './tokenizer.mjs'
-import { MismatchedClose, UnclosedTag, UnexpectedEOF } from './errors.mjs'
+import {
+  UnexpectedInput,
+  MismatchedClose,
+  UnclosedTag,
+  UnexpectedEOF
+} from './errors.mjs'
 
 const { entries, fromEntries } = Object
 
@@ -208,3 +213,12 @@ function makeFn (fn) {
   const type = fn + ''
   return p => p.type === type
 }
+
+Object.assign(Parsley, {
+  UnexpectedInput,
+  MismatchedClose,
+  UnclosedTag,
+  UnexpectedEOF,
+  encode: encodeEntities,
+  decode: decodeEntities
+})
