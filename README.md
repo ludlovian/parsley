@@ -29,7 +29,7 @@ A Parsley is simply an object representing the XML element from
 opening tag to the end of the closing tag. At the root level, this is simply
 the XML document.
 
-It has three properties:
+It has three read only properties:
 - `type` a string with the element type
 - `attr` an object of the attribute key/values
 - `children` an array of child Parsley objects and/or strings
@@ -39,6 +39,10 @@ Attribute values and text elements have the basic XML entities decoded.
 ### Parsley.from(xml, options) => Parsley
 
 Parses the xml and returns the Parsley.
+
+Parsleys created from xml have laziness built in. In particular, the atributes
+and text are not decoded unless accessed. This allows most of the XML to be
+skipped over quickly.
 
 #### Options
 
