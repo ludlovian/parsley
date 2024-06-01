@@ -42,17 +42,21 @@ const entityTests = [
 ]
 
 suite('decode & encode Entities', () => {
-  test('decoding', t => {
+  suite('decoding', () => {
     for (const [str, exp, msg] of entityTests) {
-      const act = decodeEntities(str)
-      eq(act, exp, msg)
+      test(msg, () => {
+        const act = decodeEntities(str)
+        eq(act, exp, 'matches')
+      })
     }
   })
 
-  test('encoding', t => {
+  suite('encoding', () => {
     for (const [exp, str, msg] of entityTests) {
-      const act = encodeEntities(str)
-      eq(act, exp, msg)
+      test(msg, () => {
+        const act = encodeEntities(str)
+        eq(act, exp, msg)
+      })
     }
   })
 
