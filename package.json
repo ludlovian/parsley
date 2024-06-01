@@ -8,13 +8,9 @@
     "clean": "rm -rf coverage/ node_modules/.cache/",
     "format": "prettier-standard '{src,test}/**/*.mjs'",
     "lint": "standard '{src,test}/**/*.mjs' | snazzy",
-    "test": "c8 uvu"
+    "test": "c8 node --test"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "debug": "^4.3.4",
-    "uvu": "^0.5.6"
-  }
+  "license": "ISC"
 }

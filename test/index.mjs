@@ -1,5 +1,5 @@
-import { test } from 'uvu'
-import * as assert from 'uvu/assert'
+import { suite, test } from 'node:test'
+import assert from 'node:assert'
 
 import Parsley from '../src/index.mjs'
 
@@ -12,10 +12,9 @@ const ROUND_TRIP_TESTS = [
   ['encoded text', '<a>a&lt;b</a>'],
   ['encoded attributes', '<a b="c&lt;d">e</a>'],
   ['leading white space', ' <a />', '<a />'],
-  ['trailing white space', '<a /> ', '<a />']
+  ['trailing white space', '<a /> ', '<a />'],
+  ['leading CDATA', '<![CDATA[x]]><a />', '<a />']
 ]
-
-ROUND_TRIP_TESTS.forEach(testRoundTrip)
 
 const FIND_TESTS = [
   ['basic extract', '<a><b>c</b></a>', 'b', '<b>c</b>'],
@@ -42,96 +41,135 @@ const FIND_TESTS = [
   ['empty textAll', '<a><b /></a>', null, [], true]
 ]
 
-FIND_TESTS.forEach(testFind)
-
-function testRoundTrip ([msg, xml, exp]) {
-  exp = exp || xml
-  test(msg, () => {
-    const p = Parsley.from(xml)
-    assert.equal(p.xml(), exp)
-  })
-}
-
-function testFind ([msg, xml, fn, exp, all]) {
-  test(msg, () => {
-    const p = Parsley.from(xml)
-    let actual
-    if (fn === null) {
-      actual = all ? p.textAll : p.text
-    } else {
-      if (all) {
-        actual = p.findAll(fn).map(p => p.xml())
-      } else {
-        const found = p.find(fn)
-        actual = found ? found.xml() : found
-      }
+suite('Parsley', () => {
+  suite('Round trip', () => {
+    for (const [msg, xml, exp] of ROUND_TRIP_TESTS) {
+      test(msg, () => {
+        const p = Parsley.from(xml)
+        const act = p.xml()
+        assert.strictEqual(act, exp ?? xml)
+      })
     }
-    assert.equal(actual, exp)
   })
-}
 
-test('construction', () => {
-  const h = Parsley.create
-  const p = h('a', {})
-  p.add('b')
+  test('Find tests', t => {
+    for (const [msg, xml, fn, exp, all] of FIND_TESTS) {
+      const p = Parsley.from(xml)
+      let act
+      if (fn === null) {
+        act = all ? p.textAll : p.text
+      } else {
+        if (all) {
+          act = p.findAll(fn).map(p => p.xml())
+        } else {
+          const found = p.find(fn)
+          act = found ? found.xml() : found
+        }
+      }
+      assert.deepStrictEqual(exp, act, msg)
+    }
+  })
 
-  const child = h('c', { d: 'e' }, ['f'])
-  assert.instance(child, Parsley)
+  test('construction', () => {
+    const h = Parsley.create
+    const p = h('a', {})
+    p.add('b')
 
-  p.add(child)
+    const child = h('c', { d: 'e' }, ['f'])
+    assert.ok(child instanceof Parsley, 'child is a Parsley object')
 
-  const exp = '<a>b<c d="e">f</c></a>'
-  assert.equal(p.xml(), exp)
+    p.add(child)
+
+    const exp = '<a>b<c d="e">f</c></a>'
+    assert.strictEqual(p.xml(), exp, 'manually created correctly')
+  })
+
+  test('errors', () => {
+    assert.throws(
+      () => Parsley.from(''),
+      /Not a valid string/,
+      'Create from empty string'
+    )
+
+    assert.throws(
+      () => Parsley.from({}),
+      /Not a valid string/,
+      'Create from non-string'
+    )
+
+    assert.throws(() => Parsley.from('<'), /Unexpected EOF/, 'Unfinished doc')
+
+    const p = Parsley.create('a')
+    assert.throws(
+      () => p.add({}),
+      /Can only add text or a Parsley/,
+      'Adding an invalid child'
+    )
+  })
+
+  test('clone', () => {
+    const xml = '<a>b<c d="e"><f /></c></a>'
+    const p1 = Parsley.from(xml)
+    const p2 = p1.clone()
+    assert.deepStrictEqual(p1.xml(), p2.xml(), 'XML cloned')
+  })
+
+  test('decoded text from CDATA', () => {
+    const xml = '<a><![CDATA[<>]]></a>'
+    const p = Parsley.from(xml)
+
+    assert.strictEqual(p.text, '<>', 'Text is already decoded')
+    const exp = '<a>&lt;&gt;</a>'
+
+    assert.strictEqual(p.xml(), exp, 'Text is re-encoded')
+  })
+
+  test('encoded attrs', () => {
+    const xml = '<a b="&gt;" />'
+    const p = Parsley.from(xml)
+
+    assert.strictEqual(p.attr.b, '>', 'attribute decoded correctly')
+
+    assert.strictEqual(p.xml(), xml, 'attribute re-encoded correctly')
+  })
+
+  test('safe mode', () => {
+    const safe = true
+    assert.strictEqual(Parsley.from('<', { safe }), null)
+    assert.strictEqual(Parsley.from({}, { safe }), null)
+  })
+
+  test('Find with blanks', () => {
+    const xml = '<a />'
+    const p = Parsley.from(xml)
+
+    let f = p.find('b')
+    assert.strictEqual(f, null)
+
+    f = p.find('b', { blank: true })
+    assert.ok(f instanceof Parsley)
+  })
+
+  test('Allow unclosed', () => {
+    const allowUnclosed = true
+    const xml1 = '<a>b<c d="e"><f /></a>'
+    const xml2 = '<a>b<c d="e"><f /></c></a>'
+    assert.throws(
+      () => Parsley.from(xml1),
+      /Mismatched close/,
+      'Unclosed normally throws'
+    )
+    const p = Parsley.from(xml1, { allowUnclosed })
+    assert.strictEqual(p.xml(), xml2, 'Inserts assumed close')
+  })
+
+  test('Unclosed tag', () => {
+    const xml = '<a><b>c</b>'
+    assert.throws(() => Parsley.from(xml), /Unclosed tag/)
+  })
+
+  test('Blank parsley', () => {
+    const p = new Parsley()
+    assert.strictEqual(p.xml(), '', 'Returns blank xml')
+  })
 })
-
-test('errors', () => {
-  assert.throws(() => Parsley.from(''), 'Not a valid string')
-  assert.throws(() => Parsley.from({}), 'Not a valid string')
-  assert.throws(() => Parsley.from('<'))
-
-  const p = Parsley.create('a')
-  assert.throws(() => p.add({}), 'Can only add text or a Parsley')
-})
-
-test('safe mode', () => {
-  const safe = true
-  assert.equal(Parsley.from('<', { safe }), null)
-  assert.equal(Parsley.from({}, { safe }), null)
-})
-
-test('clone', () => {
-  const xml1 = '<a>b<c d="e"><f /></c></a>'
-  const xml2 = '<a>b<c d="z"><f /></c></a>'
-  const p1 = Parsley.from(xml1)
-  const p2 = p1.clone()
-  p2.children[1].attr.d = 'z'
-  assert.equal(p1.xml(), xml1)
-  assert.equal(p2.xml(), xml2)
-})
-
-test('From multiple text with no element', () => {
-  const xml = 'a<![CDATA[b]]>c'
-  assert.equal(Parsley.from(xml), null)
-})
-
-test('Find with blanks', () => {
-  const xml = '<a />'
-  const p = Parsley.from(xml)
-
-  let f = p.find('b')
-  assert.equal(f, null)
-
-  f = p.find('b', { blank: true })
-  assert.instance(f, Parsley)
-})
-
-test('Allow unclosed', () => {
-  const allowUnclosed = true
-  const xml1 = '<a>b<c d="e"><f /></a>'
-  const xml2 = '<a>b<c d="e"><f /></c></a>'
-  assert.throws(() => Parsley.from(xml1), 'Unclosed normally throws')
-  const p = Parsley.from(xml1, { allowUnclosed })
-  assert.equal(p.xml(), xml2, 'Inserts assumed close')
-})
-
-test.run()
