@@ -91,6 +91,18 @@ export default class Parsley {
     return this.#find(makeFn(fn), true, true)
   }
 
+  get (fn) {
+    fn = makeFn(fn)
+    const pred = c => c instanceof Parsley && fn(c)
+    return this.#children.find(pred) ?? null
+  }
+
+  getAll (fn) {
+    fn = makeFn(fn)
+    const pred = c => c instanceof Parsley && fn(c)
+    return this.#children.filter(pred)
+  }
+
   add (child) {
     if (typeof child === 'string') {
       child = ParsleyText.fromDecoded(child)

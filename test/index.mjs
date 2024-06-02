@@ -70,6 +70,55 @@ suite('Parsley', () => {
     }
   })
 
+  suite('get / getAll', () => {
+    test('Find first matching child', () => {
+      const xml = '<a><b num="1" /><b num="2" /></a>'
+      const exp = '<b num="1" />'
+
+      const act = Parsley.from(xml).get('b').xml()
+      assert.equal(act, exp)
+    })
+
+    test('Find no matching child', () => {
+      const xml = '<a><b num="1" /><b num="2" /></a>'
+
+      const act = Parsley.from(xml).get('c')
+      assert.equal(act, null)
+    })
+
+    test('Find all matching children', () => {
+      const xml = '<a><b num="1" /><b num="2" /></a>'
+      const exp = ['<b num="1" />', '<b num="2" />']
+
+      const act = Parsley.from(xml).getAll('b').map(x => x.xml())
+      assert.deepEqual(act, exp)
+    })
+
+    test('Find no matching children', () => {
+      const xml = '<a><b num="1" /><b num="2" /></a>'
+      const exp = []
+
+      const act = Parsley.from(xml).getAll('c').map(x => x.xml())
+      assert.deepEqual(act, exp)
+    })
+
+    test('Ignore nested children on get', () => {
+      const xml = '<a><b><c num="1" /></b><c num="2" /></a>'
+      const exp = '<c num="2" />'
+
+      const act = Parsley.from(xml).get('c').xml()
+      assert.equal(act, exp)
+    })
+
+    test('Ignore nested children on getAll', () => {
+      const xml = '<a><b><c num="1" /></b><c num="2" /></a>'
+      const exp = ['<c num="2" />']
+
+      const act = Parsley.from(xml).getAll('c').map(x => x.xml())
+      assert.deepEqual(act, exp)
+    })
+  })
+
   test('construction', () => {
     const h = Parsley.create
     const p = h('a', {})

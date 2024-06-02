@@ -58,9 +58,19 @@ Creates one manually
 
 Adds a child to the current Parsley
 
-### .text => String
+### .get(type|fn) => Parsley | null
 
-The first text element in this Parsley
+Returns the first _direct child_ with the relevant type (or matching the
+supplied function). Differs from `.find` in that it does not descend
+
+### .getAll(type|fn) => [Parsley]
+
+Returns all the _direct children_ with the relevant time (or matching
+the supplied function). Differs from `.findAll` in that it does not descend
+
+### .text => String | null
+
+The first text element in this Parsley at any level
 
 ### .textAll => [String, ...]
 
