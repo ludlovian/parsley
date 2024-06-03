@@ -33,6 +33,13 @@ export default class Parsley {
     return this.#children.map(x => (x instanceof ParsleyText ? x.text : x))
   }
 
+  get isText () {
+    for (const child of this.#children) {
+      if (child instanceof Parsley) return false
+    }
+    return true
+  }
+
   xml () {
     if (!this.#type) return ''
 

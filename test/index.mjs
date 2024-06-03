@@ -70,12 +70,24 @@ suite('Parsley', () => {
     }
   })
 
+  suite('.isText', () => {
+    const xml = '<a>1<b>2</b><c>3<![CDATA[4]]></c><d>5<e /></d></a>'
+    const p = Parsley.from(xml)
+
+    assert.equal(p.get('b').isText, true, 'element with one text')
+    assert.equal(p.get('c').isText, true, 'element with two texts')
+    assert.equal(p.get('d').isText, false, 'element with mixed')
+    assert.equal(p.find('e').isText, true, 'empty element')
+  })
+
   suite('get / getAll', () => {
     test('Find first matching child', () => {
       const xml = '<a><b num="1" /><b num="2" /></a>'
       const exp = '<b num="1" />'
 
-      const act = Parsley.from(xml).get('b').xml()
+      const act = Parsley.from(xml)
+        .get('b')
+        .xml()
       assert.equal(act, exp)
     })
 
@@ -90,7 +102,9 @@ suite('Parsley', () => {
       const xml = '<a><b num="1" /><b num="2" /></a>'
       const exp = ['<b num="1" />', '<b num="2" />']
 
-      const act = Parsley.from(xml).getAll('b').map(x => x.xml())
+      const act = Parsley.from(xml)
+        .getAll('b')
+        .map(x => x.xml())
       assert.deepEqual(act, exp)
     })
 
@@ -98,7 +112,9 @@ suite('Parsley', () => {
       const xml = '<a><b num="1" /><b num="2" /></a>'
       const exp = []
 
-      const act = Parsley.from(xml).getAll('c').map(x => x.xml())
+      const act = Parsley.from(xml)
+        .getAll('c')
+        .map(x => x.xml())
       assert.deepEqual(act, exp)
     })
 
@@ -106,7 +122,9 @@ suite('Parsley', () => {
       const xml = '<a><b><c num="1" /></b><c num="2" /></a>'
       const exp = '<c num="2" />'
 
-      const act = Parsley.from(xml).get('c').xml()
+      const act = Parsley.from(xml)
+        .get('c')
+        .xml()
       assert.equal(act, exp)
     })
 
@@ -114,7 +132,9 @@ suite('Parsley', () => {
       const xml = '<a><b><c num="1" /></b><c num="2" /></a>'
       const exp = ['<c num="2" />']
 
-      const act = Parsley.from(xml).getAll('c').map(x => x.xml())
+      const act = Parsley.from(xml)
+        .getAll('c')
+        .map(x => x.xml())
       assert.deepEqual(act, exp)
     })
   })

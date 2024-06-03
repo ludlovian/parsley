@@ -68,6 +68,11 @@ supplied function). Differs from `.find` in that it does not descend
 Returns all the _direct children_ with the relevant time (or matching
 the supplied function). Differs from `.findAll` in that it does not descend
 
+### .isText => Boolean
+
+Tests whether this element is purely a text - ie it has no Parsley children.
+It may have multiple text children, however.
+
 ### .text => String | null
 
 The first text element in this Parsley at any level
