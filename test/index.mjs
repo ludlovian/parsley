@@ -52,25 +52,27 @@ suite('Parsley', () => {
     }
   })
 
-  test('Find tests', t => {
+  suite('Find tests', t => {
     for (const [msg, xml, fn, exp, all] of FIND_TESTS) {
-      const p = Parsley.from(xml)
-      let act
-      if (fn === null) {
-        act = all ? p.textAll : p.text
-      } else {
-        if (all) {
-          act = p.findAll(fn).map(p => p.xml())
+      test(msg, () => {
+        const p = Parsley.from(xml)
+        let act
+        if (fn === null) {
+          act = all ? p.textAll : p.text
         } else {
-          const found = p.find(fn)
-          act = found ? found.xml() : found
+          if (all) {
+            act = p.findAll(fn).map(p => p.xml())
+          } else {
+            const found = p.find(fn)
+            act = found ? found.xml() : found
+          }
         }
-      }
-      assert.deepStrictEqual(exp, act, msg)
+        assert.deepStrictEqual(exp, act, msg)
+      })
     }
   })
 
-  suite('.isText', () => {
+  test('.isText', () => {
     const xml = '<a>1<b>2</b><c>3<![CDATA[4]]></c><d>5<e /></d></a>'
     const p = Parsley.from(xml)
 

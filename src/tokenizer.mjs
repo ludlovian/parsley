@@ -195,11 +195,12 @@ function tagOpenEnd (buffer, start) {
   let quote = ''
   for (let i = start; i < len; i++) {
     const char = buffer.charAt(i)
-    if (char === '>' && !quote) {
-      return [i, i + 1]
-    } else if (char === '"' || char === "'") {
+    if (quote) {
       if (quote === char) quote = ''
-      else if (!quote) quote = char
+    } else if (char === '"' || char === "'") {
+      quote = char
+    } else if (char === '>') {
+      return [i, i + 1]
     }
   }
   return undefined
