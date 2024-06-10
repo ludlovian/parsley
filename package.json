@@ -1,5 +1,5 @@
 {
-  "name": "parsley",
+  "name": "@ludlovian/parsley",
   "version": "1.2.1",
   "description": "Simple XML parser",
   "type": "module",
@@ -12,5 +12,5 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "Unlicense"
 }
