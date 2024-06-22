@@ -243,4 +243,27 @@ suite('Parsley', () => {
     const p = new Parsley()
     assert.strictEqual(p.xml(), '', 'Returns blank xml')
   })
+
+  test('Find inside mtching children', () => {
+    let exp
+    let act
+    let p
+
+    const xml = [
+      '<a x="1">',
+      '<b x="2">',
+      '<c x="1"/>',
+      '</b>',
+      '</a>'
+    ].join('')
+    const elem = Parsley.from(xml)
+
+    exp = ['a', 'c']
+    act = elem.findAll(p => p.attr.x === '1').map(p => p.type)
+    assert.deepStrictEqual(act, exp)
+
+    exp = ['a', 'b', 'c']
+    act = elem.findAll(p => true).map(p => p.type)
+    assert.deepStrictEqual(act, exp)
+  })
 })

@@ -67,10 +67,7 @@ export default class Parsley {
     return [...walk(this)]
 
     function * walk (parsley) {
-      if (fn(parsley)) {
-        yield parsley
-        return
-      }
+      if (fn(parsley)) yield parsley
 
       for (const child of parsley.#children) {
         if (child instanceof Parsley) {
