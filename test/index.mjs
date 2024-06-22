@@ -79,7 +79,7 @@ suite('Parsley', () => {
     assert.equal(p.get('b').isText, true, 'element with one text')
     assert.equal(p.get('c').isText, true, 'element with two texts')
     assert.equal(p.get('d').isText, false, 'element with mixed')
-    assert.equal(p.find('e').isText, true, 'empty element')
+    assert.equal(p.find('e').isText, false, 'empty element')
   })
 
   suite('get / getAll', () => {

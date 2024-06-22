@@ -34,6 +34,7 @@ export default class Parsley {
   }
 
   get isText () {
+    if (!this.#children.length) return false
     for (const child of this.#children) {
       if (child instanceof Parsley) return false
     }
