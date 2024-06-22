@@ -1,6 +1,6 @@
 {
   "name": "@ludlovian/parsley",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Simple XML parser",
   "type": "module",
   "exports": "./src/index.mjs",
