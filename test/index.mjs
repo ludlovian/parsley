@@ -247,15 +247,10 @@ suite('Parsley', () => {
   test('Find inside mtching children', () => {
     let exp
     let act
-    let p
 
-    const xml = [
-      '<a x="1">',
-      '<b x="2">',
-      '<c x="1"/>',
-      '</b>',
-      '</a>'
-    ].join('')
+    const xml = ['<a x="1">', '<b x="2">', '<c x="1"/>', '</b>', '</a>'].join(
+      ''
+    )
     const elem = Parsley.from(xml)
 
     exp = ['a', 'c']
@@ -265,5 +260,44 @@ suite('Parsley', () => {
     exp = ['a', 'b', 'c']
     act = elem.findAll(p => true).map(p => p.type)
     assert.deepStrictEqual(act, exp)
+  })
+
+  test('loose mode', () => {
+    let xml
+
+    // HTML void
+    xml = '<a><br></a>'
+    assert.doesNotThrow(() => Parsley.from(xml, { loose: true }))
+
+    // Mismatched close
+    xml = '<a><b></a>'
+    assert.doesNotThrow(() => Parsley.from(xml, { loose: true }))
+
+    // Missing close
+    xml = '<a><b>'
+    assert.doesNotThrow(() => Parsley.from(xml, { loose: true }))
+
+    // Bad quotes in attr
+    xml = '<a "b="c"></a>'
+    assert.doesNotThrow(() => Parsley.from(xml, { loose: true }))
+
+    // Bad formed CDATA
+    xml = '<a><![CDATX'
+    assert.doesNotThrow(() => Parsley.from(xml, { loose: true }))
+  })
+
+  test('trim', () => {
+    const xml = `
+      <a>
+        <b>
+          <![CDATA[ cde ]]>
+        </b>
+      </a>`
+
+    const p1 = Parsley.from(xml)
+    const p2 = p1.trim()
+    const exp = '<a><b>cde</b></a>'
+    const act = p2.xml()
+    assert.strictEqual(act, exp)
   })
 })

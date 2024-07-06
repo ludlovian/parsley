@@ -47,8 +47,26 @@ skipped over quickly.
 #### Options
 
 Valid options are:
-- safe (true/false) - if set, then any errors will not throw but result in `null` being returned
-- allowUnclosed - if set, this will permit closing tags to be absent, and will assume them where it can
+#### safe
+if set, any errors will not throw but result in `null` being returned
+
+#### simpleTagOpen
+Normally, tag opens check for `>` not inside quotes to cope with unescaped
+close bracket being in attributes.
+
+This turns that off, replacing it instead with a simple search for `>`. This
+copes with unmatched quotes at the risk of a bracket in attributes. Neither
+should really happen, but the world is imperfect.
+
+#### allowUnclosed
+Permits closing tags to be assumed if missing, eg `<a><b></a>`
+
+#### html
+Assumes the known HTML void tags are self closing, eg `<link>` becomes `<link />`
+
+#### loose
+A loosey-goosey mode which includes `simpleTagOpen`, `allowUnclosed` and `html` but also
+accepts unfinished XML and returns the best it can. Never throws anything
 
 ### Parsley.create(type, attr, children)
 
@@ -88,6 +106,10 @@ Rebuilds the xml representation
 ### .clone() => Parsley
 
 Produces a clone
+
+### .trim() => Parsley
+
+Produces a clone with no extraneous whitespace
 
 ### .find(condition, opts) => Parsley | null
 

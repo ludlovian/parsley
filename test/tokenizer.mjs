@@ -209,4 +209,23 @@ suite('Tokenizer', () => {
       )
     }
   })
+
+  test('simple tag open', t => {
+    const fn = t.mock.fn()
+    const xml = '<a "b="c">'
+    let tok = new Tokenizer({ simpleTagOpen: true })
+    tok.on('tagOpen', fn)
+    tok.push(xml)
+
+    assert.strictEqual(fn.mock.callCount(), 1)
+    assert.deepStrictEqual(fn.mock.calls[0].arguments[0], {
+      type: 'a',
+      attr: '"b="c"'
+    })
+    assert.strictEqual(tok.atEOD, true)
+
+    tok = new Tokenizer()
+    tok.push(xml)
+    assert.ok(!tok.atEOD)
+  })
 })

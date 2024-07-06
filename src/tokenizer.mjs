@@ -1,9 +1,202 @@
 import { UnexpectedInput } from './errors.mjs'
 import { isWhitespace } from './decode.mjs'
+import Emitter from './emitter.mjs'
+
+// Token
+//
+// These are the different types of token that can be encountered
+//
+
+class Token {
+  buffer
+  contentStart
+  contentEnd
+  consumed
+
+  // parse
+  //
+  // parses the buffer for this kind of token. Returns:
+  // - undefined if not enough data has arrived
+  // - { data, consumed } if we can turn this into data to be emitted
+  // - { tokenType } if we should change token type
+  // - throws an Error if one encountered
+
+  parse (buffer) {
+    this.buffer = buffer
+    // have we matched the start yet?
+    if (!this.matchesStart()) return undefined
+
+    // have we matched the end yet?
+    if (!this.matchesEnd()) return undefined
+
+    const content = this.buffer.slice(this.contentStart, this.contentEnd)
+    const tokenType = this.changeType(content)
+    if (tokenType) return { tokenType }
+
+    const data = this.format(content)
+    return { data, consumed: this.consumed }
+  }
+
+  // Generic processing to be over-ridden at times
+
+  matchesStart () {
+    const s = this.startText
+    const soFar = this.buffer.slice(0, s.length)
+    if (s && !s.startsWith(soFar)) {
+      throw new UnexpectedInput(soFar)
+    }
+    if (this.buffer.length < s.length) return false
+    this.contentStart = s.length
+    return true
+  }
+
+  matchesEnd () {
+    const s = this.endText
+    const i = this.buffer.indexOf(s, this.contentStart)
+    if (i === -1) return false
+    this.contentEnd = i
+    this.consumed = i + s.length
+    return true
+  }
+
+  changeType () {}
+
+  format (content) {
+    return { content }
+  }
+}
+
+class TextToken extends Token {
+  name = 'text'
+  startText = ''
+  endText = '<'
+
+  matchesEnd () {
+    // the text doesnt acutally conusme the open bracket
+    if (super.matchesEnd()) {
+      this.consumed--
+      return true
+    }
+    return false
+  }
+}
+
+class PIToken extends Token {
+  name = 'pi'
+  startText = '<?'
+  endText = '>'
+}
+
+class CDataToken extends Token {
+  name = 'cdata'
+  startText = '<![CDATA['
+  endText = ']]>'
+}
+
+class CommentToken extends Token {
+  name = 'comment'
+  startText = '<!--'
+  endText = '-->'
+}
+
+class DTDToken extends Token {
+  name = 'dtd'
+  startText = '<!'
+
+  matchesEnd () {
+    // DTDs only end on a close bracket outside [...] blocks
+    const len = this.buffer.length
+    let bracketDepth = 0
+    for (let i = this.contentStart; i < len; i++) {
+      const char = this.buffer.charAt(i)
+      if (char === '>' && !bracketDepth) {
+        this.contentEnd = i
+        this.consumed = i + 1
+        return true
+      } else if (char === '[') {
+        bracketDepth++
+      } else if (char === ']') {
+        bracketDepth--
+      }
+    }
+    return false
+  }
+}
+
+class ScriptToken extends Token {
+  name = 'script'
+  startText = '<script'
+  endText = '</script>'
+  format (content) {
+    content = this.startText + content + this.endText
+    return { content }
+  }
+}
+
+class TagOpenToken extends Token {
+  name = 'tagOpen'
+  startText = '<'
+  endText = '>'
+
+  changeType (content) {
+    if (content.startsWith('script')) return 'script'
+  }
+
+  format (content) {
+    content = content.trim()
+    const data = {}
+    if (content.endsWith('/')) {
+      data.selfClose = true
+      content = content.slice(0, -1)
+    }
+    data.type = content
+
+    const len = content.length
+    for (let i = 0; i < len; i++) {
+      if (isWhitespace(content.charAt(i))) {
+        data.type = content.slice(0, i)
+        data.attr = content.slice(i).trim()
+        break
+      }
+    }
+    return data
+  }
+}
+
+class FuzzyTagOpenToken extends TagOpenToken {
+  // permits '<' in the attributes inside quotes
+  matchesEnd () {
+    const len = this.buffer.length
+    let quote = ''
+    for (let i = this.contentStart; i < len; i++) {
+      const char = this.buffer.charAt(i)
+      if (quote) {
+        if (char === quote) quote = ''
+      } else if (char === '"' || char === "'") {
+        quote = char
+      } else if (char === '>') {
+        this.contentEnd = i
+        this.consumed = i + 1
+        return true
+      }
+    }
+    return false
+  }
+}
+
+class TagCloseToken extends Token {
+  name = 'tagClose'
+  startText = '</'
+  endText = '>'
+  format (content) {
+    return { type: content.trim() }
+  }
+}
 
 // Tokenizer
 //
-// Instances of this class turn an XML stream into tokens.
+// Instances of this class turn an XML stream into tokens which
+// are then emitted to the listener
 //
 // These tokens are:
 //
@@ -22,42 +215,41 @@ import { isWhitespace } from './decode.mjs'
 // It also does no element decoding, nor parses the attribute strings. Neither
 // may be necessary, and so can be done lazily later if needed.
 
-const TYPE = {
-  text: { start: '', end: textEnd, emit: 'text' },
-  pi: { start: '<?', end: '>', emit: 'pi' },
-  cdata: { start: '<![CDATA[', end: ']]>', emit: 'cdata' },
-  comment: { start: '<!--', end: '-->', emit: 'comment' },
-  dtd: { start: '<!', end: dtdEnd, emit: 'dtd' },
-  script: { start: '<script', end: '</script>', emit: emitScript },
-  tagClose: { start: '</', end: '>', emit: emitTagClose },
-  tagOpen: {
-    start: '<',
-    end: tagOpenEnd,
-    except: maybeScript,
-    emit: emitTagOpen
-  }
-}
-
-export default class Tokenizer {
-  #callbacks = { __proto__: null }
+export default class Tokenizer extends Emitter {
   #buffer = ''
   #pos = 0
+  #token
+  #tokenTypes = {
+    text: TextToken,
+    pi: PIToken,
+    cdata: CDataToken,
+    comment: CommentToken,
+    dtd: DTDToken,
+    script: ScriptToken,
+    tagOpen: FuzzyTagOpenToken,
+    tagClose: TagCloseToken
+  }
 
-  onAll (callback) {
-    for (const tokenType of Object.keys(TYPE)) {
-      this.on(tokenType, data => callback(tokenType, data))
+  constructor (opts = {}) {
+    super()
+    if (opts.simpleTagOpen) {
+      this.#tokenTypes.tagOpen = TagOpenToken
     }
   }
 
-  on (tokenType, callback) {
-    this.#callbacks[tokenType] = callback
+  // ---------------------------------------------------
+  //
+  // Emit & listen
+  //
+
+  onAll (callback) {
+    return super.onAll(Object.keys(this.#tokenTypes), callback)
   }
 
-  #emit (tokenType, data) {
-    const callback = this.#callbacks[tokenType]
-    if (!callback) return
-    callback(data)
-  }
+  // ---------------------------------------------------
+  //
+  // Getters & setters
+  //
 
   get buffer () {
     return this.#buffer
@@ -70,6 +262,11 @@ export default class Tokenizer {
   get pos () {
     return this.#pos
   }
+
+  // ---------------------------------------------------
+  //
+  // Push & parse
+  //
 
   push (data) {
     this.#buffer += data
@@ -85,160 +282,51 @@ export default class Tokenizer {
   }
 
   #parseBuffer () {
+    if (this.#token) return this.#parseToken()
     const len = this.#buffer.length
-
-    // Return if not enought data yet
     if (!len) return undefined
 
     let char = this.#buffer.charAt(0)
 
-    // is it a text element
-    if (char !== '<') return this.#parseToken(TYPE.text)
+    if (char !== '<') return this.#selectToken('text')
 
-    if (len < 2) return undefined // need more data
+    if (len < 2) return undefined
     char = this.#buffer.charAt(1)
 
-    // Processing instruction
-    if (char === '?') return this.#parseToken(TYPE.pi)
+    if (char === '?') return this.#selectToken('pi')
 
     // CDATA, Comment, DTD - all start with !
     if (char === '!') {
-      // Need at least one more charatcer
       if (len < 3) return undefined
       char = this.#buffer.charAt(2)
-      if (char === '[') return this.#parseToken(TYPE.cdata)
-      if (char === '-') return this.#parseToken(TYPE.comment)
-      return this.#parseToken(TYPE.dtd)
+      if (char === '[') return this.#selectToken('cdata')
+      if (char === '-') return this.#selectToken('comment')
+      return this.#selectToken('dtd')
     }
 
-    if (char === '/') return this.#parseToken(TYPE.tagClose)
+    if (char === '/') return this.#selectToken('tagClose')
 
-    // regular tag, but it might be a <script> which we treat differently
-    return this.#parseToken(TYPE.tagOpen)
+    return this.#selectToken('tagOpen')
   }
 
-  #parseToken (t) {
-    const len = this.#buffer.length
-
-    // does the data we have match it so far
-    const soFar = this.#buffer.slice(0, t.start.length)
-    if (t.start.indexOf(soFar) === -1) {
-      throw new UnexpectedInput(soFar, this.#pos)
-    }
-
-    // do we have enough to count as a start?
-    if (len < t.start.length) return undefined
-
-    const contentStart = t.start.length
-
-    // can we find the end
-    let contentEnd
-    let consumed
-
-    if (typeof t.end === 'string') {
-      contentEnd = this.#buffer.indexOf(t.end, contentStart)
-      if (contentEnd === -1) return undefined // not yet found the end
-
-      consumed = contentEnd + t.end.length
-    } else {
-      const result = t.end(this.#buffer, contentStart)
-      if (result === undefined) {
-        return undefined // not yet found the end
-      }
-      ;[contentEnd, consumed] = result
-    }
-
-    const content = this.#buffer.slice(contentStart, contentEnd)
-
-    if (t.except) {
-      const newType = t.except(content)
-      if (newType) return this.#parseToken(newType)
-    }
-
-    if (typeof t.emit === 'string') {
-      this.#emit(t.emit, { content })
-    } else {
-      const [tokenType, data] = t.emit(content)
-      this.#emit(tokenType, data)
-    }
-    return consumed
-  }
-}
-
-function textEnd (buffer, start) {
-  const ix = buffer.indexOf('<', start)
-  if (ix === -1) return undefined
-  return [ix, ix]
-}
-
-function dtdEnd (buffer, start) {
-  // DTD's end on a ">" but only outside '['...']' blocks
-  const len = buffer.length
-  let bracketDepth = 0
-  for (let i = start; i < len; i++) {
-    const char = buffer.charAt(i)
-    if (char === '>' && !bracketDepth) {
-      return [i, i + 1]
-    } else if (char === '[') {
-      bracketDepth++
-    } else if (char === ']') {
-      bracketDepth--
-    }
-  }
-  return undefined
-}
-
-function tagOpenEnd (buffer, start) {
-  // open tags can have '>'s inside attributes, so we skip over anything in
-  // quotes (single or double)
-  const len = buffer.length
-  let quote = ''
-  for (let i = start; i < len; i++) {
-    const char = buffer.charAt(i)
-    if (quote) {
-      if (quote === char) quote = ''
-    } else if (char === '"' || char === "'") {
-      quote = char
-    } else if (char === '>') {
-      return [i, i + 1]
-    }
-  }
-  return undefined
-}
-
-function maybeScript (content) {
-  return content.startsWith('script') ? TYPE.script : undefined
-}
-
-function emitTagClose (content) {
-  return ['tagClose', { type: content.trim() }]
-}
-
-function emitScript (content) {
-  // add back in the start and end
-  content = TYPE.script.start + content + TYPE.script.end
-  return ['script', { content }]
-}
-
-function emitTagOpen (content) {
-  content = content.trim()
-  const data = {}
-  if (content.endsWith('/')) {
-    data.selfClose = true
-    content = content.slice(0, -1)
-  }
-
-  data.type = content
-
-  // now split on first whitespace
-  const len = content.length
-  for (let i = 0; i < len; i++) {
-    if (isWhitespace(content.charAt(i))) {
-      data.type = content.slice(0, i)
-      data.attr = content.slice(i).trim()
-      break
+  #parseToken () {
+    const tok = this.#token
+    try {
+      const result = tok.parse(this.#buffer)
+      if (!result) return undefined
+      if (result.tokenType) return this.#selectToken(result.tokenType)
+      this.#token = undefined
+      this.emit(tok.name, result.data)
+      return result.consumed
+    } catch (err) {
+      err.pos = this.#pos
+      throw err
     }
   }
 
-  return ['tagOpen', data]
+  #selectToken (tokenType) {
+    const Type = this.#tokenTypes[tokenType]
+    this.#token = new Type()
+    return this.#parseToken()
+  }
 }

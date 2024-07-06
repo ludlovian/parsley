@@ -1,5 +1,5 @@
 import { decodeEntities, decodeAttributes, encodeEntities } from './decode.mjs'
-import Tokenizer from './tokenizer.mjs'
+import Parser from './parser.mjs'
 import {
   UnexpectedInput,
   MismatchedClose,
@@ -15,6 +15,32 @@ export default class Parsley {
   #rawAttr = ''
   #attr = undefined
   #children = []
+
+  // -----------------------------------------------------
+  //
+  // Creation
+  //
+
+  static #create (type, rawAttr = '', children = []) {
+    const p = new Parsley()
+    p.#type = type
+    p.#rawAttr = rawAttr
+    children.forEach(c => p.add(c))
+    return p
+  }
+
+  static create (type, attr = {}, children = []) {
+    const p = new Parsley()
+    p.#type = type
+    p.#attr = attr
+    children.forEach(c => p.add(c))
+    return p
+  }
+
+  // -----------------------------------------------------
+  //
+  // Getters
+  //
 
   get type () {
     return this.#type
@@ -41,6 +67,11 @@ export default class Parsley {
     return true
   }
 
+  // -----------------------------------------------------
+  //
+  // Reconstruct & adjust
+  //
+
   xml () {
     if (!this.#type) return ''
 
@@ -61,6 +92,28 @@ export default class Parsley {
     if (!children) return `<${type}${attr} />`
     return `<${type}${attr}>${children}</${type}>`
   }
+
+  clone () {
+    const p = new Parsley()
+    p.#type = this.#type
+    p.#rawAttr = this.#rawAttr
+    p.#attr = this.#attr
+    p.#children = this.#children.map(child => child.clone())
+    return p
+  }
+
+  trim () {
+    const p = this.clone()
+    p.#children = p.#children
+      .map(child => child.trim())
+      .filter(child => !(child instanceof ParsleyText && child.isEmpty))
+    return p
+  }
+
+  // -----------------------------------------------------
+  //
+  // Find
+  //
 
   #find (fn, findAll, parsleyOnly) {
     if (!findAll) return walk(this).next().value ?? null
@@ -96,7 +149,7 @@ export default class Parsley {
     return this.#find(makeFn(fn), true, true)
   }
 
-  get (fn) {
+  get_ (fn) {
     fn = makeFn(fn)
     const pred = c => c instanceof Parsley && fn(c)
     return this.#children.find(pred) ?? null
@@ -108,111 +161,66 @@ export default class Parsley {
     return this.#children.filter(pred)
   }
 
+  // -----------------------------------------------------
+  //
+  // Construction
+  //
+
   add (child) {
     if (typeof child === 'string') {
-      child = ParsleyText.fromDecoded(child)
-    } else if (!(child instanceof Parsley)) {
+      child = ParsleyText.decoded(child)
+    }
+    if (child instanceof ParsleyText || child instanceof Parsley) {
+      this.#children.push(child)
+    } else {
       throw new Error('Can only add text or a Parsley')
     }
-    this.#children.push(child)
     return this
   }
 
-  clone () {
-    return Parsley.create(
-      this.type,
-      { ...this.attr },
-      this.children.map(child =>
-        child instanceof Parsley ? child.clone() : child
-      )
-    )
-  }
+  // -----------------------------------------------------
+  //
+  // Parsing
+  //
 
-  static create (type, attr = {}, children = []) {
-    const p = new Parsley()
-    p.#type = type
-    p.#attr = attr
-    children.forEach(child => p.add(child))
-    return p
-  }
+  static from (xml, opts = {}) {
+    if (opts.loose) {
+      opts.html = true
+      opts.allowUnclosed = true
+      opts.simpleTagOpen = true
+    }
 
-  static from (xml, { safe = false, allowUnclosed = false } = {}) {
     if (!xml || typeof xml !== 'string') {
-      if (safe) return null
+      if (opts.safe) return null
       throw new Error('Not a valid string')
     }
 
+    const parser = new Parser({
+      ...opts,
+      newElem: Parsley.#create,
+      newRawText: t => new ParsleyText(t),
+      newText: ParsleyText.decoded
+    })
     try {
-      const p = Parsley.#fromText(xml, allowUnclosed)
-      return p
+      return parser.push(xml).end()
     } catch (err) {
-      if (safe) return null
+      if (opts.safe) return null
+      if (opts.loose) return parser.end()
       throw err
     }
   }
-
-  static #fromText (xml, allowUnclosed) {
-    const tok = new Tokenizer()
-    const stack = [] // stack of parent elems
-    let curr // the current element
-    let root // the final root
-
-    tok.on('text', ({ content }) => {
-      if (!curr) return
-      const pt = ParsleyText.from(content)
-      curr.#children.push(pt)
-    })
-
-    tok.on('cdata', ({ content }) => {
-      if (!curr) return
-      const pt = ParsleyText.fromDecoded(content)
-      curr.#children.push(pt)
-    })
-
-    tok.on('tagOpen', ({ type, attr, selfClose }) => {
-      const p = new Parsley()
-      p.#type = type
-      p.#rawAttr = attr ?? ''
-      root = root ?? p // first parsley becomes the root
-      if (curr) curr.#children.push(p)
-      if (!selfClose) {
-        if (curr) stack.push(curr)
-        curr = p
-      }
-    })
-
-    tok.on('tagClose', ({ type }) => {
-      // keep going up the stack until we find this
-      while (true) {
-        if (curr && curr.type === type) {
-          curr = stack.pop()
-          break
-        } else if (allowUnclosed && curr) {
-          curr = stack.pop()
-        } else {
-          throw new MismatchedClose(type)
-        }
-      }
-    })
-
-    tok.push(xml)
-    if (curr) throw new UnclosedTag(curr.type)
-    if (!tok.atEOD) throw new UnexpectedEOF()
-    return root
-  }
 }
+Parsley.prototype.get = Parsley.prototype.get_
 
 class ParsleyText {
   #rawText = undefined
   #text = undefined
 
-  static from (text) {
-    const pt = new ParsleyText()
-    pt.#rawText = text
-    return pt
+  constructor (rawText) {
+    this.#rawText = rawText
   }
 
-  static fromDecoded (text) {
+  static decoded (text) {
     const pt = new ParsleyText()
     pt.#text = text
     return pt
@@ -222,6 +230,22 @@ class ParsleyText {
     if (this.#text !== undefined) return this.#text
     this.#text = decodeEntities(this.#rawText)
     return this.#text
+  }
+
+  get isEmpty () {
+    return !(this.#rawText || this.#text)
+  }
+
+  clone () {
+    return this.#text !== undefined
+      ? ParsleyText.decoded(this.#text)
+      : new ParsleyText(this.#rawText)
+  }
+
+  trim () {
+    return this.#text !== undefined
+      ? ParsleyText.decoded(this.#text.trim())
+      : new ParsleyText(this.#rawText.trim())
   }
 }
 

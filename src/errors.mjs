@@ -1,7 +1,6 @@
 export class UnexpectedInput extends Error {
-  constructor (xml, pos) {
+  constructor (xml) {
     super(`Unexpected input: ${xml}`)
-    this.pos = pos
   }
 }
 
