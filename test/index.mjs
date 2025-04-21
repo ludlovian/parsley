@@ -16,143 +16,139 @@ const ROUND_TRIP_TESTS = [
   ['leading CDATA', '<![CDATA[x]]><a />', '<a />']
 ]
 
-const FIND_TESTS = [
-  ['basic extract', '<a><b>c</b></a>', 'b', '<b>c</b>'],
-  [
-    'multi extract',
-    '<a><b>c</b>e<f /><b /></a>',
-    'b',
-    ['<b>c</b>', '<b />'],
-    true
-  ],
-  ['basic text', '<a>b</a>', null, 'b'],
-  ['multiple text', '<a>b<c>d</c></a>', null, ['b', 'd'], true],
-  [
-    'extract by function',
-    '<a><b x="1" /><c x="2" /></a>',
-    p => p.attr.x === '2',
-    '<c x="2" />'
-  ],
-  ['find root', '<a><b>c</b></a>', 'a', '<a><b>c</b></a>'],
-  ['findAll with root matching', '<a />', 'a', ['<a />'], true],
-  ['empty find', '<a>b<c /></a>', 'd', null],
-  ['empty findAll', '<a>b<c /></a>', 'd', [], true],
-  ['empty text', '<a><b /></a>', null, null],
-  ['empty textAll', '<a><b /></a>', null, [], true]
-]
-
 suite('Parsley', () => {
   suite('Round trip', () => {
     for (const [msg, xml, exp] of ROUND_TRIP_TESTS) {
       test(msg, () => {
         const p = Parsley.from(xml)
-        const act = p.xml()
+        const act = p.toXml()
         assert.strictEqual(act, exp ?? xml)
       })
     }
   })
 
-  suite('Find tests', t => {
-    for (const [msg, xml, fn, exp, all] of FIND_TESTS) {
-      test(msg, () => {
-        const p = Parsley.from(xml)
-        let act
-        if (fn === null) {
-          act = all ? p.textAll : p.text
-        } else {
-          if (all) {
-            act = p.findAll(fn).map(p => p.xml())
-          } else {
-            const found = p.find(fn)
-            act = found ? found.xml() : found
-          }
-        }
-        assert.deepStrictEqual(exp, act, msg)
-      })
-    }
-  })
-
-  test('.isText', () => {
-    const xml = '<a>1<b>2</b><c>3<![CDATA[4]]></c><d>5<e /></d></a>'
-    const p = Parsley.from(xml)
-
-    assert.equal(p.get('b').isText, true, 'element with one text')
-    assert.equal(p.get('c').isText, true, 'element with two texts')
-    assert.equal(p.get('d').isText, false, 'element with mixed')
-    assert.equal(p.find('e').isText, false, 'empty element')
-  })
-
-  suite('get / getAll', () => {
-    test('Find first matching child', () => {
-      const xml = '<a><b num="1" /><b num="2" /></a>'
-      const exp = '<b num="1" />'
-
-      const act = Parsley.from(xml)
-        .get('b')
-        .xml()
-      assert.equal(act, exp)
-    })
-
-    test('Find no matching child', () => {
-      const xml = '<a><b num="1" /><b num="2" /></a>'
-
-      const act = Parsley.from(xml).get('c')
-      assert.equal(act, null)
-    })
-
-    test('Find all matching children', () => {
-      const xml = '<a><b num="1" /><b num="2" /></a>'
-      const exp = ['<b num="1" />', '<b num="2" />']
-
-      const act = Parsley.from(xml)
-        .getAll('b')
-        .map(x => x.xml())
-      assert.deepEqual(act, exp)
-    })
-
-    test('Find no matching children', () => {
-      const xml = '<a><b num="1" /><b num="2" /></a>'
-      const exp = []
-
-      const act = Parsley.from(xml)
-        .getAll('c')
-        .map(x => x.xml())
-      assert.deepEqual(act, exp)
-    })
-
-    test('Ignore nested children on get', () => {
-      const xml = '<a><b><c num="1" /></b><c num="2" /></a>'
-      const exp = '<c num="2" />'
-
-      const act = Parsley.from(xml)
-        .get('c')
-        .xml()
-      assert.equal(act, exp)
-    })
-
-    test('Ignore nested children on getAll', () => {
-      const xml = '<a><b><c num="1" /></b><c num="2" /></a>'
-      const exp = ['<c num="2" />']
-
-      const act = Parsley.from(xml)
-        .getAll('c')
-        .map(x => x.xml())
-      assert.deepEqual(act, exp)
-    })
-  })
-
-  test('construction', () => {
+  test('Manual construction', () => {
     const h = Parsley.create
     const p = h('a', {})
     p.add('b')
 
     const child = h('c', { d: 'e' }, ['f'])
-    assert.ok(child instanceof Parsley, 'child is a Parsley object')
+    assert.ok(child.isElement, 'child is a Parsley object')
 
     p.add(child)
 
     const exp = '<a>b<c d="e">f</c></a>'
-    assert.strictEqual(p.xml(), exp, 'manually created correctly')
+    assert.strictEqual(p.toXml(), exp, 'manually created correctly')
+  })
+
+  test('clone', () => {
+    const xml = '<a>b<c d="e"><f /></c></a>'
+    const p1 = Parsley.from(xml)
+    const p2 = p1.clone()
+    assert.deepStrictEqual(p1.toXml(), p2.toXml(), 'XML cloned')
+  })
+
+  test('trim', () => {
+    const xml = `
+      <a>
+        <b>
+          <![CDATA[ cde ]]>
+        </b>
+      </a>`
+
+    const p1 = Parsley.from(xml)
+    const p2 = p1.trim()
+    const exp = '<a><b>cde</b></a>'
+    const act = p2.toXml()
+    assert.strictEqual(act, exp)
+  })
+
+  test('Walk', t => {
+    const xml = '<a>foo<bar>baz</bar><baz /></a>'
+
+    const p = Parsley.from(xml)
+    const bar = p.children[1]
+    const baz = p.children[2]
+    const exp = [p, p.children[0], bar, bar.children[0], baz]
+
+    const act = [...p.walk()]
+
+    assert.deepStrictEqual(act, exp)
+
+    const act2 = [...p]
+    assert.deepStrictEqual(act2, exp)
+  })
+
+  test('.getText', t => {
+    const xml = '<a>foo<bar>baz</bar><baz /></a>'
+
+    const p1 = Parsley.from(xml)
+    const exp = 'foobaz'
+    const act = p1.getText()
+
+    assert.deepStrictEqual(act, exp)
+
+    const p2 = Parsley.from('<a><b /></a>')
+    const exp2 = ''
+    const act2 = p2.getText()
+
+    assert.deepStrictEqual(act2, exp2)
+  })
+
+  suite('find', () => {
+    test('find basic type', () => {
+      const xml = '<a><b><c /></b></a>'
+      const exp = '<b><c /></b>'
+      const p = Parsley.from(xml)
+      const act = p.find('b').toXml()
+
+      assert.deepStrictEqual(act, exp)
+    })
+
+    test('find type and class', () => {
+      const xml = '<a><b /><b class="foo bar">baz</b></a>'
+      const exp = '<b class="foo bar">baz</b>'
+      const p = Parsley.from(xml)
+      const act = p.find('b.foo').toXml()
+
+      assert.deepStrictEqual(act, exp)
+    })
+
+    test('find - type not found', () => {
+      const xml = '<a><b><c /></b></a>'
+      const exp = undefined
+      const p = Parsley.from(xml)
+      const act = p.find('z')?.toXml()
+
+      assert.deepStrictEqual(act, exp)
+    })
+
+    test('find - type found but not class', () => {
+      const xml = '<a><b class="foo"><c /></b></a>'
+      const exp = undefined
+      const p = Parsley.from(xml)
+      const act = p.find('b.bar')?.toXml()
+
+      assert.deepStrictEqual(act, exp)
+    })
+
+    test('findAll matching', () => {
+      const xml = '<a><b><c /></b><b d="e" /></a>'
+      const exp = ['<b><c /></b>', '<b d="e" />']
+      const p = Parsley.from(xml)
+      const act = p.findAll('b').map(p => p.toXml())
+
+      assert.deepStrictEqual(act, exp)
+    })
+
+    test('findAll not matching', () => {
+      const xml = '<a><b><c /></b><b d="e" /></a>'
+      const exp = []
+      const p = Parsley.from(xml)
+      const act = p.findAll('z').map(p => p.toXml())
+
+      assert.deepStrictEqual(act, exp)
+    })
   })
 
   test('errors', () => {
@@ -178,21 +174,14 @@ suite('Parsley', () => {
     )
   })
 
-  test('clone', () => {
-    const xml = '<a>b<c d="e"><f /></c></a>'
-    const p1 = Parsley.from(xml)
-    const p2 = p1.clone()
-    assert.deepStrictEqual(p1.xml(), p2.xml(), 'XML cloned')
-  })
-
   test('decoded text from CDATA', () => {
     const xml = '<a><![CDATA[<>]]></a>'
     const p = Parsley.from(xml)
 
-    assert.strictEqual(p.text, '<>', 'Text is already decoded')
+    assert.strictEqual(p.getText(), '<>', 'Text is already decoded')
     const exp = '<a>&lt;&gt;</a>'
 
-    assert.strictEqual(p.xml(), exp, 'Text is re-encoded')
+    assert.strictEqual(p.toXml(), exp, 'Text is re-encoded')
   })
 
   test('encoded attrs', () => {
@@ -201,24 +190,13 @@ suite('Parsley', () => {
 
     assert.strictEqual(p.attr.b, '>', 'attribute decoded correctly')
 
-    assert.strictEqual(p.xml(), xml, 'attribute re-encoded correctly')
+    assert.strictEqual(p.toXml(), xml, 'attribute re-encoded correctly')
   })
 
   test('safe mode', () => {
     const safe = true
     assert.strictEqual(Parsley.from('<', { safe }), null)
     assert.strictEqual(Parsley.from({}, { safe }), null)
-  })
-
-  test('Find with blanks', () => {
-    const xml = '<a />'
-    const p = Parsley.from(xml)
-
-    let f = p.find('b')
-    assert.strictEqual(f, null)
-
-    f = p.find('b', { blank: true })
-    assert.ok(f instanceof Parsley)
   })
 
   test('Allow unclosed', () => {
@@ -231,7 +209,7 @@ suite('Parsley', () => {
       'Unclosed normally throws'
     )
     const p = Parsley.from(xml1, { allowUnclosed })
-    assert.strictEqual(p.xml(), xml2, 'Inserts assumed close')
+    assert.strictEqual(p.toXml(), xml2, 'Inserts assumed close')
   })
 
   test('Unclosed tag', () => {
@@ -241,25 +219,8 @@ suite('Parsley', () => {
 
   test('Blank parsley', () => {
     const p = new Parsley()
-    assert.strictEqual(p.xml(), '', 'Returns blank xml')
-  })
-
-  test('Find inside mtching children', () => {
-    let exp
-    let act
-
-    const xml = ['<a x="1">', '<b x="2">', '<c x="1"/>', '</b>', '</a>'].join(
-      ''
-    )
-    const elem = Parsley.from(xml)
-
-    exp = ['a', 'c']
-    act = elem.findAll(p => p.attr.x === '1').map(p => p.type)
-    assert.deepStrictEqual(act, exp)
-
-    exp = ['a', 'b', 'c']
-    act = elem.findAll(p => true).map(p => p.type)
-    assert.deepStrictEqual(act, exp)
+    assert.strictEqual(p.toXml(), '', 'Returns blank xml')
+    assert.deepStrictEqual([...p], [], 'No elements')
   })
 
   test('loose mode', () => {
@@ -286,18 +247,13 @@ suite('Parsley', () => {
     assert.doesNotThrow(() => Parsley.from(xml, { loose: true }))
   })
 
-  test('trim', () => {
-    const xml = `
-      <a>
-        <b>
-          <![CDATA[ cde ]]>
-        </b>
-      </a>`
-
-    const p1 = Parsley.from(xml)
-    const p2 = p1.trim()
-    const exp = '<a><b>cde</b></a>'
-    const act = p2.xml()
-    assert.strictEqual(act, exp)
+  suite('ParsleyText', () => {
+    test('.text', () => {
+      const p = Parsley.from('<a>foobar</a>')
+      const el = p.children[0]
+      assert.strictEqual(!el.isElement, true)
+      assert.strictEqual(el.toString(), 'foobar')
+      assert.strictEqual(el.text, 'foobar')
+    })
   })
 })

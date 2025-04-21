@@ -32,7 +32,7 @@ the XML document.
 It has three read only properties:
 - `type` a string with the element type
 - `attr` an object of the attribute key/values
-- `children` an array of child Parsley objects and/or strings
+- `children` an array of [`Parsley` | `ParsleyText`]
 
 Attribute values and text elements have the basic XML entities decoded.
 
@@ -43,6 +43,8 @@ Parses the xml and returns the Parsley.
 Parsleys created from xml have laziness built in. In particular, the atributes
 and text are not decoded unless accessed. This allows most of the XML to be
 skipped over quickly.
+
+NB the API has changed a bit - oops.
 
 #### Options
 
@@ -74,32 +76,28 @@ Creates one manually
 
 ### .add(stringOrParsley)
 
-Adds a child to the current Parsley
+Adds a child to the current Parsley. Strings are automatically
+wrapped in a ParsleyText
 
-### .get(type|fn) => Parsley | null
+### .isElement
 
-Returns the first _direct child_ with the relevant type (or matching the
-supplied function). Differs from `.find` in that it does not descend
+Returns `true`. Allows you to see if this is a `Parsley` or
+`ParsleyText`
 
-### .getAll(type|fn) => [Parsley]
+### .getText() => string|undefined
 
-Returns all the _direct children_ with the relevant time (or matching
-the supplied function). Differs from `.findAll` in that it does not descend
+Returns all the text elements under this one (or its children)
+joining them all together.
 
-### .isText => Boolean
+Really a convenience for:
+```
+this.walk()
+    .filter(p => !p.isElement)
+    .map(p => p.toText())
+    .toArray()
+```
 
-Tests whether this element is purely a text - ie it has no Parsley children.
-It may have multiple text children, however.
-
-### .text => String | null
-
-The first text element in this Parsley at any level
-
-### .textAll => [String, ...]
-
-An array of all the text elements in it
-
-### .xml() => String
+### .toXml() => String
 
 Rebuilds the xml representation
 
@@ -111,23 +109,19 @@ Produces a clone
 
 Produces a clone with no extraneous whitespace
 
-### .find(condition, opts) => Parsley | null
+### * .walk() => <iterator>
 
-Finds the first child (or grand\*-child) matching the condition.
-If there is no such then it returns `null`.
+Returns an `Iterator` which will walk over this element and
+all its descendants recursively. Can then be used with 
+standard iterator operators
 
-If the condition is a regular string, then it is a match on the `type`.
+### .find(type) => Parsley|undefined
 
+Finds the first element of the given type. If `type.class`
+is given, it will look for the first type with the given class
 
-#### Options
+Just another convernience around `.walk`
 
-##### blank = (true|false)
+### .find(type) => [Parsley]
 
-If set, then `.find` will always return a Parsley - a blank one if the condition
-was not found.
-
-### .findAll(condition) => [Parsley,...]
-
-Returns an array of all the matching children as Parsleys, which might be empty
-
-
+Like `.find` but finds all the elements matching the type (and class).

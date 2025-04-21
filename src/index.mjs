@@ -8,6 +8,7 @@ import {
 } from './errors.mjs'
 
 const { entries, fromEntries } = Object
+const customInspect = Symbol.for('nodejs.util.inspect.custom')
 
 export default class Parsley {
   // internal members
@@ -37,9 +38,21 @@ export default class Parsley {
     return p
   }
 
+  add (child) {
+    if (typeof child === 'string') {
+      child = ParsleyText.decoded(child)
+    }
+    if (child instanceof ParsleyText || child instanceof Parsley) {
+      this.#children.push(child)
+    } else {
+      throw new Error('Can only add text or a Parsley')
+    }
+    return this
+  }
+
   // -----------------------------------------------------
   //
-  // Getters
+  // Getters & inspection
   //
 
   get type () {
@@ -56,34 +69,31 @@ export default class Parsley {
   }
 
   get children () {
-    return this.#children.map(x => (x instanceof ParsleyText ? x.text : x))
+    return this.#children
   }
 
-  get isText () {
-    if (!this.#children.length) return false
-    for (const child of this.#children) {
-      if (child instanceof Parsley) return false
-    }
-    return true
+  /* c8 ignore start */
+  [customInspect] (depth, opts) {
+    if (depth < 0) return opts.stylize('[Parsley]', 'string')
+    return `Parsley<${opts.stylize(this.type, 'string')}>`
   }
+  /* c8 ignore stop */
 
   // -----------------------------------------------------
   //
   // Reconstruct & adjust
   //
 
-  xml () {
+  toXml () {
     if (!this.#type) return ''
 
     const attr = entries(this.attr)
       .map(([k, v]) => ` ${k}="${encodeEntities(v)}"`)
       .join('')
 
-    const children = this.children
+    const children = this.#children
       .map(child =>
-        child instanceof Parsley
-          ? child.xml()
-          : encodeEntities(child.toString())
+        child.isElement ? child.toXml() : encodeEntities(child.toString())
       )
       .join('')
 
@@ -106,76 +116,52 @@ export default class Parsley {
     const p = this.clone()
     p.#children = p.#children
       .map(child => child.trim())
-      .filter(child => !(child instanceof ParsleyText && child.isEmpty))
+      .filter(child => child.isElement || !child.isEmpty)
     return p
   }
 
   // -----------------------------------------------------
   //
-  // Find
+  // Iterator & searches
   //
 
-  #find (fn, findAll, parsleyOnly) {
-    if (!findAll) return walk(this).next().value ?? null
-    return [...walk(this)]
-
-    function * walk (parsley) {
-      if (fn(parsley)) yield parsley
-
-      for (const child of parsley.#children) {
-        if (child instanceof Parsley) {
-          yield * walk(child)
-        } else {
-          if (!parsleyOnly && fn(child)) yield child.text
-        }
+  * walk () {
+    if (!this.type) return
+    yield this
+    for (const child of this.#children) {
+      if (child.isElement) {
+        yield * child
+      } else {
+        yield child
       }
     }
   }
 
-  get text () {
-    return this.#find(p => p instanceof ParsleyText, false, false)
+  getText () {
+    return this.walk()
+      .filter(p => !p.isElement)
+      .map(p => p.toString())
+      .toArray()
+      .join('')
   }
 
-  get textAll () {
-    return this.#find(p => p instanceof ParsleyText, true, false)
+  find (typeIsh) {
+    // the lazy way
+    return this.findAll(typeIsh)[0]
   }
 
-  find (fn, { blank = false } = {}) {
-    const p = this.#find(makeFn(fn), false, true)
-    return p != null ? p : blank ? new Parsley() : null
-  }
-
-  findAll (fn) {
-    return this.#find(makeFn(fn), true, true)
-  }
-
-  get_ (fn) {
-    fn = makeFn(fn)
-    const pred = c => c instanceof Parsley && fn(c)
-    return this.#children.find(pred) ?? null
-  }
-
-  getAll (fn) {
-    fn = makeFn(fn)
-    const pred = c => c instanceof Parsley && fn(c)
-    return this.#children.filter(pred)
-  }
-
-  // -----------------------------------------------------
-  //
-  // Construction
-  //
-
-  add (child) {
-    if (typeof child === 'string') {
-      child = ParsleyText.decoded(child)
+  findAll (typeIsh) {
+    let fn = p => p.isElement && p.type === typeIsh
+    if (typeIsh.includes('.')) {
+      const [type, klass] = typeIsh.split('.')
+      fn = p =>
+        p.isElement &&
+        p.type === type &&
+        p.attr.class?.split(' ').includes(klass)
     }
-    if (child instanceof ParsleyText || child instanceof Parsley) {
-      this.#children.push(child)
-    } else {
-      throw new Error('Can only add text or a Parsley')
-    }
-    return this
+    return this.walk()
+      .filter(fn)
+      .toArray()
   }
 
   // -----------------------------------------------------
@@ -210,7 +196,10 @@ export default class Parsley {
     }
   }
 }
-Parsley.prototype.get = Parsley.prototype.get_
+Object.assign(Parsley.prototype, {
+  isElement: true,
+  [Symbol.iterator]: Parsley.prototype.walk
+})
 
 class ParsleyText {
   #rawText = undefined
@@ -226,10 +215,21 @@ class ParsleyText {
     return pt
   }
 
-  get text () {
+  toString () {
     if (this.#text !== undefined) return this.#text
     this.#text = decodeEntities(this.#rawText)
     return this.#text
+  }
+
+  /* c8 ignore start */
+  [customInspect] (depth, opts) {
+    if (depth < 0) return opts.stylize('[Text]', 'string')
+    return `Text(${opts.stylize(this.toString(), 'string')})`
+  }
+  /* c8 ignore stop */
+
+  get text () {
+    return this.toString()
   }
 
   get isEmpty () {
@@ -248,12 +248,7 @@ class ParsleyText {
       : new ParsleyText(this.#rawText.trim())
   }
 }
-
-function makeFn (fn) {
-  if (typeof fn === 'function') return fn
-  const type = fn + ''
-  return p => p.type === type
-}
+ParsleyText.prototype.isElement = false
 
 Object.assign(Parsley, {
   UnexpectedInput,
