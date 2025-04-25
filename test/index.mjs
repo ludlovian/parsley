@@ -95,6 +95,28 @@ suite('Parsley', () => {
     assert.deepStrictEqual(act2, exp2)
   })
 
+  suite('toXml', () => {
+    const p = Parsley.from('<a><b /></a>')
+
+    test('with selfClose', () => {
+      const exp = '<a><b /></a>'
+      const act = p.toXml({ selfClose: true })
+      assert.deepStrictEqual(act, exp)
+    })
+
+    test('without selfClose', () => {
+      const exp = '<a><b></b></a>'
+      const act = p.toXml({ selfClose: false })
+      assert.deepStrictEqual(act, exp)
+    })
+
+    test('with selfClose as default', () => {
+      const exp = '<a><b /></a>'
+      const act = p.toXml()
+      assert.deepStrictEqual(act, exp)
+    })
+  })
+
   suite('find', () => {
     test('find basic type', () => {
       const xml = '<a><b><c /></b></a>'

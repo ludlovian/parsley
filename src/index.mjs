@@ -84,8 +84,9 @@ export default class Parsley {
   // Reconstruct & adjust
   //
 
-  toXml () {
+  toXml (opts = {}) {
     if (!this.#type) return ''
+    const { selfClose = true } = opts
 
     const attr = entries(this.attr)
       .map(([k, v]) => ` ${k}="${encodeEntities(v)}"`)
@@ -93,13 +94,13 @@ export default class Parsley {
 
     const children = this.#children
       .map(child =>
-        child.isElement ? child.toXml() : encodeEntities(child.toString())
+        child.isElement ? child.toXml(opts) : encodeEntities(child.toString())
       )
       .join('')
 
     const type = this.type
 
-    if (!children) return `<${type}${attr} />`
+    if (!children && selfClose) return `<${type}${attr} />`
     return `<${type}${attr}>${children}</${type}>`
   }
 
