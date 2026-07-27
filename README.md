@@ -84,18 +84,15 @@ wrapped in a ParsleyText
 Returns `true`. Allows you to see if this is a `Parsley` or
 `ParsleyText`
 
-### .getText() => string|undefined
+### .getTexts() => string[]
 
-Returns all the text elements under this one (or its children)
-joining them all together.
+Returns all the text elements under this one (or its children) as an
+array
 
-Really a convenience for:
-```
-this.walk()
-    .filter(p => !p.isElement)
-    .map(p => p.toText())
-    .toArray()
-```
+### .getText() => string
+
+Returns all the text elements under this one (or its children) as a joined
+string
 
 ### .toXml() => String
 

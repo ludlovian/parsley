@@ -139,11 +139,14 @@ export default class Parsley {
   }
 
   getText () {
+    return this.getTexts().join('')
+  }
+
+  getTexts () {
     return this.walk()
       .filter(p => !p.isElement)
       .map(p => p.toString())
       .toArray()
-      .join('')
   }
 
   find (typeIsh) {
